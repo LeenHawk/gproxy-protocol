@@ -1431,6 +1431,8 @@ pub struct BetaThinkingConfigEnabled {
     pub budget_tokens: u64,
     #[serde(rename = "type")]
     pub type_: BetaThinkingConfigEnabledType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display: Option<BetaThinkingDisplay>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1455,12 +1457,22 @@ pub enum BetaThinkingConfigDisabledType {
 pub struct BetaThinkingConfigAdaptive {
     #[serde(rename = "type")]
     pub type_: BetaThinkingConfigAdaptiveType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display: Option<BetaThinkingDisplay>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BetaThinkingConfigAdaptiveType {
     #[serde(rename = "adaptive")]
     Adaptive,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BetaThinkingDisplay {
+    #[serde(rename = "summarized")]
+    Summarized,
+    #[serde(rename = "omitted")]
+    Omitted,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

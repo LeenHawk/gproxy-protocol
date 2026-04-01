@@ -8,6 +8,8 @@ pub use crate::gemini::types::{GeminiApiError, GeminiApiErrorResponse, GeminiRes
 pub struct GeminiContentEmbedding {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub values: Vec<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<Vec<i32>>,
 }
 
 /// Type of task for which embeddings will be used.

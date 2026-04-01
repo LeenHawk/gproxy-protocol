@@ -136,9 +136,84 @@ pub struct BetaModelInfo {
     pub created_at: OffsetDateTime,
     /// Human-readable model name.
     pub display_name: String,
+    /// Maximum input token count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_input_tokens: Option<u64>,
+    /// Maximum output token count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u64>,
+    /// Model capabilities.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<BetaModelCapabilities>,
     /// Object type, always "model".
     #[serde(rename = "type")]
     pub type_: BetaModelType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BetaModelCapabilities {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub citations: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_execution: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_management: Option<BetaContextManagementCapability>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<BetaEffortCapability>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_input: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pdf_input: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structured_outputs: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<BetaThinkingCapability>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BetaCapabilitySupport {
+    pub supported: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BetaContextManagementCapability {
+    pub supported: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear_thinking_20251015: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear_tool_uses_20250919: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compact_20260112: Option<BetaCapabilitySupport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BetaEffortCapability {
+    pub supported: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub high: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub low: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub medium: Option<BetaCapabilitySupport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BetaThinkingCapability {
+    pub supported: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub types: Option<BetaThinkingTypes>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BetaThinkingTypes {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adaptive: Option<BetaCapabilitySupport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<BetaCapabilitySupport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

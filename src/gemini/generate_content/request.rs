@@ -93,4 +93,7 @@ pub struct RequestBody {
         skip_serializing_if = "Option::is_none"
     )]
     pub cached_content: Option<String>,
+    /// Optional logging behavior override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store: Option<bool>,
 }

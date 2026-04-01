@@ -98,6 +98,12 @@ pub struct GeminiBidiGenerateContentSetup {
         skip_serializing_if = "Option::is_none"
     )]
     pub prefix_turns: Option<Vec<GeminiContent>>,
+    #[serde(
+        rename = "historyConfig",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub history_config: Option<GeminiHistoryConfig>,
 }
 
 /// Incremental conversation content from client.
@@ -349,6 +355,16 @@ pub struct GeminiLiveUsageMetadata {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct GeminiHistoryConfig {
+    #[serde(
+        rename = "initialHistoryInClientContent",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub initial_history_in_client_content: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct GeminiAudioTranscriptionConfig {}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -441,6 +457,8 @@ pub enum GeminiTurnCoverage {
     TurnIncludesOnlyActivity,
     #[serde(rename = "TURN_INCLUDES_ALL_INPUT")]
     TurnIncludesAllInput,
+    #[serde(rename = "TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO")]
+    TurnIncludesAudioActivityAndAllVideo,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
