@@ -1,0 +1,15 @@
+[package]
+name = "gproxy-protocol"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Wire format types for OpenAI, Anthropic, and Gemini LLM APIs."
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+time = { workspace = true }
