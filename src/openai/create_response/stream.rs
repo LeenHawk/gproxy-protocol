@@ -7,41 +7,6 @@ use crate::openai::create_response::types::{
     ResponseSummaryTextContent,
 };
 
-/// Parsed SSE stream body for `POST /responses` with `stream=true`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct OpenAiCreateResponseSseStreamBody {
-    /// SSE events in receive order.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub events: Vec<OpenAiCreateResponseSseEvent>,
-}
-
-/// A single SSE event frame.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OpenAiCreateResponseSseEvent {
-    /// Optional SSE `event` field.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub event: Option<String>,
-    /// SSE `data` field payload.
-    pub data: OpenAiCreateResponseSseData,
-}
-
-/// SSE `data` payload.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-#[allow(clippy::large_enum_variant)]
-pub enum OpenAiCreateResponseSseData {
-    /// A regular stream event object.
-    Event(ResponseStreamEvent),
-    /// Stream end marker (`[DONE]`).
-    Done(String),
-}
-
-impl OpenAiCreateResponseSseData {
-    pub fn is_done(&self) -> bool {
-        matches!(self, Self::Done(marker) if marker == "[DONE]")
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResponseStreamErrorPayload {
     #[serde(rename = "type")]
@@ -60,6 +25,9 @@ impl ResponseStreamErrorPayload {
 }
 
 /// Stream event union documented by Responses API.
+///
+/// Each SSE `data:` line (except `[DONE]`) deserializes to one of these variants,
+/// discriminated by the `type` field in JSON.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ResponseStreamEvent {

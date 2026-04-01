@@ -6,42 +6,9 @@ use crate::openai::create_chat_completions::types::{
     ChatCompletionServiceTier, CompletionUsage,
 };
 
-/// Parsed SSE stream body for `POST /chat/completions` with `stream=true`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct OpenAiChatCompletionsSseStreamBody {
-    /// SSE events in receive order.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub events: Vec<OpenAiChatCompletionsSseEvent>,
-}
-
-/// A single SSE event frame.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OpenAiChatCompletionsSseEvent {
-    /// Optional SSE `event` field.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub event: Option<String>,
-    /// SSE `data` field payload.
-    pub data: OpenAiChatCompletionsSseData,
-}
-
-/// SSE `data` payload.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-#[allow(clippy::large_enum_variant)]
-pub enum OpenAiChatCompletionsSseData {
-    /// A regular stream chunk with `ChatCompletionChunk` shape.
-    Chunk(ChatCompletionChunk),
-    /// Stream end marker (`[DONE]`).
-    Done(String),
-}
-
-impl OpenAiChatCompletionsSseData {
-    pub fn is_done(&self) -> bool {
-        matches!(self, Self::Done(marker) if marker == "[DONE]")
-    }
-}
-
 /// Streamed chat completion chunk.
+///
+/// Each SSE `data:` line (except `[DONE]`) deserializes to this type.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatCompletionChunk {
     pub id: String,
@@ -91,7 +58,6 @@ pub struct ChatCompletionChunkDelta {
     pub annotations: Option<Vec<ChatCompletionAnnotation>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChatCompletionChunkDeltaToolCall>>,
-    /// Optional stream obfuscation payload when enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub obfuscation: Option<String>,
 }
