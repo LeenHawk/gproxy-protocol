@@ -11,7 +11,6 @@ use crate::gemini::generate_content::types::{
     GeminiBlockReason, GeminiCandidate, GeminiContent, GeminiFinishReason, GeminiPromptFeedback,
     GeminiUsageMetadata,
 };
-use crate::gemini::stream_generate_content::stream::GeminiSseChunk;
 use crate::transform::claude::utils::claude_model_to_string;
 use crate::transform::gemini::stream_generate_content::utils::parse_json_object_or_empty;
 use crate::transform::utils::TransformError;
@@ -189,7 +188,7 @@ impl ClaudeToGeminiStream {
     pub fn on_event(
         &mut self,
         event: ClaudeStreamEvent,
-        out: &mut Vec<GeminiSseChunk>,
+        out: &mut Vec<GeminiGenerateContentResponseBody>,
     ) -> Result<(), TransformError> {
         if self.finished {
             return Ok(());

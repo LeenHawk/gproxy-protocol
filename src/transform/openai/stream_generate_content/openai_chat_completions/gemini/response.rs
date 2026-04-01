@@ -4,7 +4,6 @@ use crate::gemini::generate_content::response::ResponseBody as GeminiGenerateCon
 use crate::gemini::generate_content::types::{
     GeminiBlockReason, GeminiCandidate, GeminiFinishReason,
 };
-use crate::gemini::stream_generate_content::stream::GeminiSseChunk;
 use crate::openai::create_chat_completions::stream::{
     ChatCompletionChunk, ChatCompletionChunkChoice, ChatCompletionChunkDelta,
     ChatCompletionChunkDeltaToolCall, ChatCompletionChunkDeltaToolCallType,
@@ -385,7 +384,7 @@ impl GeminiToOpenAiChatCompletionsStream {
 
     pub fn on_chunk(
         &mut self,
-        chunk: GeminiSseChunk,
+        chunk: GeminiGenerateContentResponseBody,
         out: &mut Vec<ChatCompletionChunk>,
     ) {
         if self.finished {

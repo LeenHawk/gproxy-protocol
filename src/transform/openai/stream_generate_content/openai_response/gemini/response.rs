@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use crate::gemini::generate_content::response::ResponseBody as GeminiGenerateContentResponseBody;
 use crate::gemini::generate_content::types::{GeminiBlockReason, GeminiFinishReason};
-use crate::gemini::stream_generate_content::stream::GeminiSseChunk;
 use crate::openai::count_tokens::types as ot;
 use crate::openai::create_response::stream::{ResponseStreamContentPart, ResponseStreamEvent};
 use crate::openai::create_response::types as rt;
@@ -681,7 +680,7 @@ impl GeminiToOpenAiResponseStream {
 
     pub fn on_chunk(
         &mut self,
-        chunk: GeminiSseChunk,
+        chunk: GeminiGenerateContentResponseBody,
         out: &mut Vec<ResponseStreamEvent>,
     ) {
         if self.finished {

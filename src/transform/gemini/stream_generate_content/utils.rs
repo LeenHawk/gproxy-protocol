@@ -1,4 +1,4 @@
-use crate::gemini::stream_generate_content::stream::GeminiSseChunk;
+use crate::gemini::generate_content::response::ResponseBody as GeminiGenerateContentResponseBody;
 use crate::gemini::types::JsonObject;
 
 pub fn parse_json_object_or_empty(input: &str) -> JsonObject {
@@ -9,6 +9,6 @@ pub fn parse_json_object_or_empty(input: &str) -> JsonObject {
 /// can use `is_finished()` on the converter instead.  This is kept only
 /// for the `nonstream_to_stream` path that still needs to materialise a
 /// final chunk, which is simply an empty body.
-pub fn empty_chunk() -> GeminiSseChunk {
-    GeminiSseChunk::default()
+pub fn empty_chunk() -> GeminiGenerateContentResponseBody {
+    GeminiGenerateContentResponseBody::default()
 }

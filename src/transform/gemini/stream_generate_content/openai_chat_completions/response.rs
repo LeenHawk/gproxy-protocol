@@ -6,7 +6,6 @@ use crate::gemini::generate_content::types::{
     GeminiBlockReason, GeminiCandidate, GeminiContent, GeminiFinishReason, GeminiPromptFeedback,
     GeminiUsageMetadata,
 };
-use crate::gemini::stream_generate_content::stream::GeminiSseChunk;
 use crate::openai::create_chat_completions::stream::ChatCompletionChunk;
 use crate::openai::create_chat_completions::types::ChatCompletionFinishReason;
 use crate::transform::gemini::stream_generate_content::utils::parse_json_object_or_empty;
@@ -111,7 +110,7 @@ impl OpenAiChatCompletionsToGeminiStream {
     pub fn on_chunk(
         &mut self,
         chunk: ChatCompletionChunk,
-        out: &mut Vec<GeminiSseChunk>,
+        out: &mut Vec<GeminiGenerateContentResponseBody>,
     ) {
         if self.finished {
             return;
@@ -230,7 +229,7 @@ impl OpenAiChatCompletionsToGeminiStream {
         }
     }
 
-    pub fn finish(&mut self, out: &mut Vec<GeminiSseChunk>) {
+    pub fn finish(&mut self, out: &mut Vec<GeminiGenerateContentResponseBody>) {
         if !self.finished {
             self.finished = true;
             let _ = out;

@@ -6,7 +6,6 @@ use crate::gemini::generate_content::types::{
     GeminiBlockReason, GeminiCandidate, GeminiContent, GeminiFinishReason, GeminiPromptFeedback,
     GeminiUsageMetadata,
 };
-use crate::gemini::stream_generate_content::stream::GeminiSseChunk;
 use crate::openai::count_tokens::types::{
     ResponseCustomToolCallOutputContent, ResponseFunctionCallOutputContent, ResponseInputContent,
 };
@@ -168,7 +167,11 @@ impl OpenAiResponseToGeminiStream {
             .join("\n")
     }
 
-    fn map_output_item(&self, item: ResponseOutputItem, out: &mut Vec<GeminiSseChunk>) {
+    fn map_output_item(
+        &self,
+        item: ResponseOutputItem,
+        out: &mut Vec<GeminiGenerateContentResponseBody>,
+    ) {
         match item {
             ResponseOutputItem::Message(message) => {
                 for content in message.content {
@@ -287,7 +290,7 @@ impl OpenAiResponseToGeminiStream {
     pub fn on_stream_event(
         &mut self,
         event: ResponseStreamEvent,
-        out: &mut Vec<GeminiSseChunk>,
+        out: &mut Vec<GeminiGenerateContentResponseBody>,
     ) {
         if self.finished {
             return;
@@ -499,7 +502,7 @@ impl OpenAiResponseToGeminiStream {
         }
     }
 
-    pub fn finish(&mut self, out: &mut Vec<GeminiSseChunk>) {
+    pub fn finish(&mut self, out: &mut Vec<GeminiGenerateContentResponseBody>) {
         if !self.finished {
             self.finished = true;
             let _ = out;
