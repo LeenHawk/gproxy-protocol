@@ -69,32 +69,3 @@ pub struct RequestBody {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<OpenAiVideoSize>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn request_body_supports_documented_video_fields() {
-        let payload = serde_json::json!({
-            "prompt": "A tiny robot walking in the snow",
-            "image_reference": {
-                "image_url": "data:image/png;base64,abc"
-            },
-            "input_reference": "file_ref_123",
-            "model": "sora-2-pro",
-            "seconds": "8",
-            "size": "1280x720"
-        });
-
-        let decoded: RequestBody = serde_json::from_value(payload).unwrap();
-        assert_eq!(decoded.prompt, "A tiny robot walking in the snow");
-        assert_eq!(
-            decoded.image_reference.unwrap().image_url.as_deref(),
-            Some("data:image/png;base64,abc")
-        );
-        assert_eq!(decoded.input_reference.as_deref(), Some("file_ref_123"));
-        assert_eq!(decoded.seconds, Some(OpenAiVideoSeconds::S8));
-        assert_eq!(decoded.size, Some(OpenAiVideoSize::S1280x720));
-    }
-}

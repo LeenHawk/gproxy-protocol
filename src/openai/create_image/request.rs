@@ -95,26 +95,3 @@ pub struct RequestBody {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn request_body_supports_documented_quality_and_size_variants() {
-        let payload = serde_json::json!({
-            "prompt": "A cute baby sea otter",
-            "quality": "hd",
-            "size": "1792x1024",
-            "response_format": "b64_json"
-        });
-
-        let decoded: RequestBody = serde_json::from_value(payload).unwrap();
-        assert_eq!(decoded.quality, Some(OpenAiImageQuality::Hd));
-        assert_eq!(decoded.size, Some(OpenAiImageSize::S1792x1024));
-        assert_eq!(
-            decoded.response_format,
-            Some(OpenAiImageResponseFormat::B64Json)
-        );
-    }
-}

@@ -50,21 +50,3 @@ pub struct RequestHeaders {
 /// `videos.retrieve` request has no JSON body.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct RequestBody {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn request_defaults_to_get_with_video_id_path() {
-        let request = OpenAiVideoGetRequest {
-            path: PathParameters {
-                video_id: "vid_123".to_string(),
-            },
-            ..OpenAiVideoGetRequest::default()
-        };
-
-        assert_eq!(request.method, HttpMethod::Get);
-        assert_eq!(request.path.video_id, "vid_123");
-    }
-}

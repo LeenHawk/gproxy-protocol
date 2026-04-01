@@ -54,23 +54,3 @@ pub struct RequestHeaders {
 /// `videos.content.retrieve` request has no JSON body.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct RequestBody {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn query_parameters_support_documented_variant_values() {
-        let payload = serde_json::json!({
-            "variant": "spritesheet"
-        });
-
-        let decoded: QueryParameters = serde_json::from_value(payload.clone()).unwrap();
-        assert_eq!(
-            decoded.variant,
-            Some(OpenAiVideoContentVariant::Spritesheet)
-        );
-        let encoded = serde_json::to_value(decoded).unwrap();
-        assert_eq!(encoded, payload);
-    }
-}

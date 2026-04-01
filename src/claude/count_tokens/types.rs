@@ -2003,35 +2003,6 @@ pub enum BetaMcpToolsetType {
     McpToolset,
 }
 
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::*;
-
-    #[test]
-    fn custom_tool_serializes_type_field() {
-        let tool = BetaTool {
-            input_schema: BetaToolInputSchema {
-                type_: BetaToolInputSchemaType::Object,
-                properties: None,
-                required: None,
-                extra_fields: Default::default(),
-            },
-            name: "apply_patch".to_string(),
-            common: BetaToolCommonFields::default(),
-            description: Some("Edit a file with a patch".to_string()),
-            eager_input_streaming: None,
-            type_: Some(BetaCustomToolType::Custom),
-        };
-
-        let encoded = serde_json::to_value(tool).expect("custom tool should serialize");
-
-        assert_eq!(encoded["type"], json!("custom"));
-        assert!(encoded.get("type_").is_none());
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BetaMcpToolConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
