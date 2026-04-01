@@ -76,12 +76,11 @@ impl OpenAiChatCompletionsToClaudeStream {
         self.output_tokens = usage.completion_tokens;
     }
 
-    pub fn on_chunk(&mut self, chunk: ChatCompletionChunk) -> Vec<ClaudeStreamEvent> {
+    pub fn on_chunk(&mut self, chunk: ChatCompletionChunk, out: &mut Vec<ClaudeStreamEvent>) {
         if self.is_finished() {
-            return Vec::new();
+            return;
         }
 
-        let mut out = Vec::new();
         let chunk_service_tier = chunk.service_tier.clone();
 
         if matches!(self.state, StreamState::Init) {
@@ -118,12 +117,12 @@ impl OpenAiChatCompletionsToClaudeStream {
             let delta = choice.delta;
 
             if let Some(text) = delta.content {
-                self.emit_text_block(&mut out, text);
+                self.emit_text_block(out, text);
             }
 
             if let Some(refusal) = delta.refusal {
                 self.has_refusal = true;
-                self.emit_text_block(&mut out, refusal);
+                self.emit_text_block(out, refusal);
                 self.stop_reason = Some(BetaStopReason::Refusal);
             }
 
@@ -195,20 +194,17 @@ impl OpenAiChatCompletionsToClaudeStream {
                 });
             }
         }
-
-        out
     }
 
     fn emit_text_block(&mut self, out: &mut Vec<ClaudeStreamEvent>, text: String) {
         let _ = push_text_block(out, &mut self.next_block_index, text);
     }
 
-    pub fn finish(&mut self) -> Vec<ClaudeStreamEvent> {
+    pub fn finish(&mut self, out: &mut Vec<ClaudeStreamEvent>) {
         if self.is_finished() {
-            return Vec::new();
+            return;
         }
 
-        let mut out = Vec::new();
         if matches!(self.state, StreamState::Init) {
             out.push(message_start_event(
                 self.message_id.clone(),
@@ -244,6 +240,5 @@ impl OpenAiChatCompletionsToClaudeStream {
         ));
         out.push(message_stop_event());
         self.state = StreamState::Finished;
-        out
     }
 }

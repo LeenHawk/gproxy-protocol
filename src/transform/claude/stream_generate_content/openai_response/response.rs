@@ -490,20 +490,20 @@ impl OpenAiResponseToClaudeStream {
     pub fn on_stream_event(
         &mut self,
         stream_event: ResponseStreamEvent,
-    ) -> Vec<ClaudeStreamEvent> {
+        out: &mut Vec<ClaudeStreamEvent>,
+    ) {
         if self.is_finished() {
-            return Vec::new();
+            return;
         }
 
-        let mut out = Vec::new();
         match stream_event {
             ResponseStreamEvent::Created { response, .. }
             | ResponseStreamEvent::Queued { response, .. }
             | ResponseStreamEvent::InProgress { response, .. } => {
-                self.apply_response_state(&response, &mut out);
+                self.apply_response_state(&response, out);
             }
             ResponseStreamEvent::Completed { response, .. } => {
-                self.apply_response_state(&response, &mut out);
+                self.apply_response_state(&response, out);
                 self.stop_reason = Some(
                     match response
                         .incomplete_details
@@ -519,7 +519,7 @@ impl OpenAiResponseToClaudeStream {
                 );
             }
             ResponseStreamEvent::Incomplete { response, .. } => {
-                self.apply_response_state(&response, &mut out);
+                self.apply_response_state(&response, out);
                 self.stop_reason = Some(
                     match response
                         .incomplete_details
@@ -535,7 +535,7 @@ impl OpenAiResponseToClaudeStream {
                 );
             }
             ResponseStreamEvent::Failed { response, .. } => {
-                self.apply_response_state(&response, &mut out);
+                self.apply_response_state(&response, out);
                 if let Some(error) = response.error {
                     self.has_refusal = true;
                     out.push(stream_error_event(error.message));
@@ -544,40 +544,40 @@ impl OpenAiResponseToClaudeStream {
             }
             ResponseStreamEvent::AudioDelta { delta, .. } => {
                 if !delta.is_empty() {
-                    self.emit_text_block(&mut out, format!("audio_delta: {delta}"));
+                    self.emit_text_block(out, format!("audio_delta: {delta}"));
                 }
             }
             ResponseStreamEvent::AudioDone { .. } => {}
             ResponseStreamEvent::AudioTranscriptDelta { delta, .. } => {
                 if !delta.is_empty() {
-                    self.emit_text_block(&mut out, delta);
+                    self.emit_text_block(out, delta);
                 }
             }
             ResponseStreamEvent::AudioTranscriptDone { .. } => {}
             ResponseStreamEvent::CodeInterpreterCallInProgress { item_id, .. }
             | ResponseStreamEvent::CodeInterpreterCallInterpreting { item_id, .. } => {
-                self.ensure_tool_block(&mut out, &item_id, "code_interpreter");
+                self.ensure_tool_block(out, &item_id, "code_interpreter");
             }
             ResponseStreamEvent::CodeInterpreterCallCodeDelta { delta, item_id, .. } => {
-                let block_index = self.ensure_tool_block(&mut out, &item_id, "code_interpreter");
+                let block_index = self.ensure_tool_block(out, &item_id, "code_interpreter");
                 if !delta.is_empty() {
                     out.push(input_json_delta_event(block_index, delta));
                 }
             }
             ResponseStreamEvent::CodeInterpreterCallCodeDone { code, item_id, .. } => {
-                let block_index = self.ensure_tool_block(&mut out, &item_id, "code_interpreter");
+                let block_index = self.ensure_tool_block(out, &item_id, "code_interpreter");
                 if !code.is_empty() {
                     out.push(input_json_delta_event(block_index, code));
                 }
             }
             ResponseStreamEvent::CodeInterpreterCallCompleted { item_id, .. } => {
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::OutputItemAdded { item, .. } => {
-                self.map_output_item(&mut out, item, false);
+                self.map_output_item(out, item, false);
             }
             ResponseStreamEvent::OutputItemDone { item, .. } => {
-                self.map_output_item(&mut out, item, true);
+                self.map_output_item(out, item, true);
             }
             ResponseStreamEvent::ContentPartAdded {
                 content_index,
@@ -587,7 +587,7 @@ impl OpenAiResponseToClaudeStream {
                 ..
             } => match part {
                 ResponseStreamContentPart::OutputText(text) => {
-                    self.ensure_running(&mut out);
+                    self.ensure_running(out);
                     let key = (item_id.clone(), output_index, content_index);
                     let block_index = if let Some(index) = self.open_text_blocks.get(&key) {
                         *index
@@ -603,7 +603,7 @@ impl OpenAiResponseToClaudeStream {
                 }
                 ResponseStreamContentPart::Refusal(refusal) => {
                     self.has_refusal = true;
-                    self.ensure_running(&mut out);
+                    self.ensure_running(out);
                     let key = (item_id.clone(), output_index, content_index);
                     let block_index = if let Some(index) = self.open_text_blocks.get(&key) {
                         *index
@@ -618,7 +618,7 @@ impl OpenAiResponseToClaudeStream {
                     }
                 }
                 ResponseStreamContentPart::ReasoningText(reasoning) => {
-                    self.ensure_running(&mut out);
+                    self.ensure_running(out);
                     let key = (item_id.clone(), output_index, content_index);
                     let block_index = if let Some(index) = self.open_thinking_blocks.get(&key) {
                         *index
@@ -701,7 +701,7 @@ impl OpenAiResponseToClaudeStream {
                 let annotation_text = annotation.to_string();
                 if !annotation_text.is_empty() {
                     self.emit_text_block(
-                        &mut out,
+                        out,
                         format!(
                             "annotation({item_id}:{output_index}:{content_index}:{annotation_index}): {annotation_text}"
                         ),
@@ -715,7 +715,7 @@ impl OpenAiResponseToClaudeStream {
                 output_index,
                 ..
             } => {
-                self.ensure_running(&mut out);
+                self.ensure_running(out);
                 let key = (item_id.clone(), output_index, content_index);
                 let block_index = if let Some(index) = self.open_text_blocks.get(&key) {
                     *index
@@ -930,7 +930,7 @@ impl OpenAiResponseToClaudeStream {
                 out.push(stop_block_event(block_index));
             }
             ResponseStreamEvent::FunctionCallArgumentsDelta { delta, item_id, .. } => {
-                let block_index = self.ensure_tool_block(&mut out, &item_id, "function");
+                let block_index = self.ensure_tool_block(out, &item_id, "function");
                 if !delta.is_empty() {
                     out.push(input_json_delta_event(block_index, delta));
                 }
@@ -942,32 +942,32 @@ impl OpenAiResponseToClaudeStream {
                 ..
             } => {
                 let block_index = self.ensure_tool_block(
-                    &mut out,
+                    out,
                     &item_id,
                     name.as_deref().unwrap_or("function"),
                 );
                 if !arguments.is_empty() {
                     out.push(input_json_delta_event(block_index, arguments));
                 }
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::FileSearchCallInProgress { item_id, .. }
             | ResponseStreamEvent::FileSearchCallSearching { item_id, .. } => {
-                self.ensure_tool_block(&mut out, &item_id, "file_search");
+                self.ensure_tool_block(out, &item_id, "file_search");
             }
             ResponseStreamEvent::FileSearchCallCompleted { item_id, .. } => {
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::WebSearchCallInProgress { item_id, .. }
             | ResponseStreamEvent::WebSearchCallSearching { item_id, .. } => {
-                self.ensure_tool_block(&mut out, &item_id, "web_search");
+                self.ensure_tool_block(out, &item_id, "web_search");
             }
             ResponseStreamEvent::WebSearchCallCompleted { item_id, .. } => {
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::ImageGenerationCallInProgress { item_id, .. }
             | ResponseStreamEvent::ImageGenerationCallGenerating { item_id, .. } => {
-                self.ensure_tool_block(&mut out, &item_id, "image_generation");
+                self.ensure_tool_block(out, &item_id, "image_generation");
             }
             ResponseStreamEvent::ImageGenerationCallPartialImage {
                 item_id,
@@ -975,10 +975,10 @@ impl OpenAiResponseToClaudeStream {
                 partial_image_index,
                 ..
             } => {
-                self.ensure_tool_block(&mut out, &item_id, "image_generation");
+                self.ensure_tool_block(out, &item_id, "image_generation");
                 if !partial_image_b64.is_empty() {
                     self.emit_text_block(
-                        &mut out,
+                        out,
                         format!(
                             "image_partial({item_id}:{partial_image_index}): {partial_image_b64}"
                         ),
@@ -986,23 +986,23 @@ impl OpenAiResponseToClaudeStream {
                 }
             }
             ResponseStreamEvent::ImageGenerationCallCompleted { item_id, .. } => {
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::CustomToolCallInputDelta { delta, item_id, .. } => {
-                let block_index = self.ensure_tool_block(&mut out, &item_id, "custom_tool");
+                let block_index = self.ensure_tool_block(out, &item_id, "custom_tool");
                 if !delta.is_empty() {
                     out.push(input_json_delta_event(block_index, delta));
                 }
             }
             ResponseStreamEvent::CustomToolCallInputDone { input, item_id, .. } => {
-                let block_index = self.ensure_tool_block(&mut out, &item_id, "custom_tool");
+                let block_index = self.ensure_tool_block(out, &item_id, "custom_tool");
                 if !input.is_empty() {
                     out.push(input_json_delta_event(block_index, input));
                 }
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::McpCallArgumentsDelta { delta, item_id, .. } => {
-                let block_index = self.ensure_tool_block(&mut out, &item_id, "mcp_call");
+                let block_index = self.ensure_tool_block(out, &item_id, "mcp_call");
                 if !delta.is_empty() {
                     out.push(input_json_delta_event(block_index, delta));
                 }
@@ -1010,31 +1010,31 @@ impl OpenAiResponseToClaudeStream {
             ResponseStreamEvent::McpCallArgumentsDone {
                 arguments, item_id, ..
             } => {
-                let block_index = self.ensure_tool_block(&mut out, &item_id, "mcp_call");
+                let block_index = self.ensure_tool_block(out, &item_id, "mcp_call");
                 if !arguments.is_empty() {
                     out.push(input_json_delta_event(block_index, arguments));
                 }
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::McpCallInProgress { item_id, .. } => {
-                self.ensure_tool_block(&mut out, &item_id, "mcp_call");
+                self.ensure_tool_block(out, &item_id, "mcp_call");
             }
             ResponseStreamEvent::McpCallCompleted { item_id, .. } => {
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::McpCallFailed { item_id, .. } => {
-                self.emit_text_block(&mut out, format!("mcp_call_failed({item_id})"));
-                self.close_tool_block(&mut out, &item_id);
+                self.emit_text_block(out, format!("mcp_call_failed({item_id})"));
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::McpListToolsInProgress { item_id, .. } => {
-                self.ensure_tool_block(&mut out, &item_id, "mcp_list_tools");
+                self.ensure_tool_block(out, &item_id, "mcp_list_tools");
             }
             ResponseStreamEvent::McpListToolsCompleted { item_id, .. } => {
-                self.close_tool_block(&mut out, &item_id);
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::McpListToolsFailed { item_id, .. } => {
-                self.emit_text_block(&mut out, format!("mcp_list_tools_failed({item_id})"));
-                self.close_tool_block(&mut out, &item_id);
+                self.emit_text_block(out, format!("mcp_list_tools_failed({item_id})"));
+                self.close_tool_block(out, &item_id);
             }
             ResponseStreamEvent::Error { error, .. } => {
                 self.has_refusal = true;
@@ -1042,17 +1042,14 @@ impl OpenAiResponseToClaudeStream {
                 self.stop_reason = Some(BetaStopReason::Refusal);
             }
         }
-
-        out
     }
 
-    pub fn finish(&mut self) -> Vec<ClaudeStreamEvent> {
+    pub fn finish(&mut self, out: &mut Vec<ClaudeStreamEvent>) {
         if self.is_finished() {
-            return Vec::new();
+            return;
         }
 
-        let mut out = Vec::new();
-        self.ensure_running(&mut out);
+        self.ensure_running(out);
 
         for block_index in std::mem::take(&mut self.open_text_blocks).into_values() {
             out.push(stop_block_event(block_index));
@@ -1084,6 +1081,5 @@ impl OpenAiResponseToClaudeStream {
         ));
         out.push(message_stop_event());
         self.state = StreamState::Finished;
-        out
     }
 }

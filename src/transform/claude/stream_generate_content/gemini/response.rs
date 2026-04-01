@@ -127,16 +127,16 @@ impl GeminiToClaudeStream {
     pub fn on_chunk(
         &mut self,
         chunk: GeminiGenerateContentResponseBody,
-    ) -> Vec<ClaudeStreamEvent> {
+        out: &mut Vec<ClaudeStreamEvent>,
+    ) {
         if self.is_finished() {
-            return Vec::new();
+            return;
         }
 
         self.update_envelope_from_chunk(&chunk);
         let chunk_index = self.chunk_seq;
         self.chunk_seq = self.chunk_seq.saturating_add(1);
 
-        let mut out = Vec::new();
         let mut chunk_has_content = false;
 
         if let Some(status_message) = chunk
@@ -146,7 +146,7 @@ impl GeminiToClaudeStream {
             && !status_message.is_empty()
         {
             chunk_has_content = true;
-            self.emit_text_block(&mut out, format!("model_status: {status_message}"));
+            self.emit_text_block(out, format!("model_status: {status_message}"));
         }
 
         if let Some(candidates) = chunk.candidates {
@@ -159,7 +159,7 @@ impl GeminiToClaudeStream {
                                 candidate_has_content = true;
                                 chunk_has_content = true;
                                 self.emit_thinking_block(
-                                    &mut out,
+                                    out,
                                     part.thought_signature.unwrap_or_else(|| {
                                         format!(
                                             "thought_{chunk_index}_{candidate_index}_{part_index}"
@@ -171,14 +171,14 @@ impl GeminiToClaudeStream {
                         } else if let Some(text) = part.text {
                             candidate_has_content = true;
                             chunk_has_content = true;
-                            self.emit_text_block(&mut out, text);
+                            self.emit_text_block(out, text);
                         }
 
                         if let Some(inline_data) = part.inline_data {
                             candidate_has_content = true;
                             chunk_has_content = true;
                             self.emit_text_block(
-                                &mut out,
+                                out,
                                 format!(
                                     "inline_data({}): {}",
                                     inline_data.mime_type, inline_data.data
@@ -190,7 +190,7 @@ impl GeminiToClaudeStream {
                             candidate_has_content = true;
                             chunk_has_content = true;
                             self.emit_tool_use_block(
-                                &mut out,
+                                out,
                                 function_call.id.unwrap_or_else(|| {
                                     format!(
                                         "tool_call_{chunk_index}_{candidate_index}_{part_index}"
@@ -211,7 +211,7 @@ impl GeminiToClaudeStream {
                                 candidate_has_content = true;
                                 chunk_has_content = true;
                                 self.emit_text_block(
-                                    &mut out,
+                                    out,
                                     format!(
                                         "function_response({}): {response_json}",
                                         function_response.name
@@ -226,7 +226,7 @@ impl GeminiToClaudeStream {
                                         candidate_has_content = true;
                                         chunk_has_content = true;
                                         self.emit_text_block(
-                                            &mut out,
+                                            out,
                                             format!(
                                                 "function_response.inline_data({candidate_index}:{part_index}:{response_part_index})({}): {}",
                                                 inline_data.mime_type, inline_data.data
@@ -245,7 +245,7 @@ impl GeminiToClaudeStream {
                             candidate_has_content = true;
                             chunk_has_content = true;
                             self.emit_text_block(
-                                &mut out,
+                                out,
                                 format!("executable_code({language}): {}", executable_code.code),
                             );
                         }
@@ -262,12 +262,12 @@ impl GeminiToClaudeStream {
                             chunk_has_content = true;
                             if output_text.is_empty() {
                                 self.emit_text_block(
-                                    &mut out,
+                                    out,
                                     format!("code_execution_result({outcome})"),
                                 );
                             } else {
                                 self.emit_text_block(
-                                    &mut out,
+                                    out,
                                     format!("code_execution_result({outcome}): {output_text}"),
                                 );
                             }
@@ -278,11 +278,11 @@ impl GeminiToClaudeStream {
                             chunk_has_content = true;
                             if let Some(mime_type) = file_data.mime_type {
                                 self.emit_text_block(
-                                    &mut out,
+                                    out,
                                     format!("file_data({mime_type}): {}", file_data.file_uri),
                                 );
                             } else {
-                                self.emit_text_block(&mut out, file_data.file_uri);
+                                self.emit_text_block(out, file_data.file_uri);
                             }
                         }
                     }
@@ -293,7 +293,7 @@ impl GeminiToClaudeStream {
                     && !finish_message.is_empty()
                 {
                     chunk_has_content = true;
-                    self.emit_text_block(&mut out, finish_message);
+                    self.emit_text_block(out, finish_message);
                 }
 
                 if let Some(reason) = candidate.finish_reason {
@@ -345,19 +345,16 @@ impl GeminiToClaudeStream {
         }
 
         if !chunk_has_content {
-            self.ensure_running(&mut out);
+            self.ensure_running(out);
         }
-
-        out
     }
 
-    pub fn finish(&mut self) -> Vec<ClaudeStreamEvent> {
+    pub fn finish(&mut self, out: &mut Vec<ClaudeStreamEvent>) {
         if self.is_finished() {
-            return Vec::new();
+            return;
         }
 
-        let mut out = Vec::new();
-        self.ensure_running(&mut out);
+        self.ensure_running(out);
 
         let final_stop_reason = self.stop_reason.clone().or({
             if self.has_tool_use {
@@ -376,7 +373,6 @@ impl GeminiToClaudeStream {
         ));
         out.push(message_stop_event());
         self.state = StreamState::Finished;
-        out
     }
 }
 

@@ -114,65 +114,63 @@ fn push_content_block_delta_events(
     }
 }
 
-impl TryFrom<ClaudeCreateMessageResponse> for Vec<ClaudeStreamEvent> {
-    type Error = TransformError;
+pub fn nonstream_to_stream(
+    value: ClaudeCreateMessageResponse,
+    out: &mut Vec<ClaudeStreamEvent>,
+) -> Result<(), TransformError> {
+    match value {
+        ClaudeCreateMessageResponse::Success { body, .. } => {
+            let mut start_message = body.clone();
+            start_message.content = Vec::new();
+            start_message.context_management = None;
+            start_message.stop_reason = None;
+            start_message.stop_sequence = None;
+            start_message.usage.output_tokens = 0;
 
-    fn try_from(value: ClaudeCreateMessageResponse) -> Result<Self, TransformError> {
-        Ok(match value {
-            ClaudeCreateMessageResponse::Success { body, .. } => {
-                let mut events = Vec::new();
+            out.push(ClaudeStreamEvent::MessageStart {
+                message: start_message,
+            });
 
-                let mut start_message = body.clone();
-                start_message.content = Vec::new();
-                start_message.context_management = None;
-                start_message.stop_reason = None;
-                start_message.stop_sequence = None;
-                start_message.usage.output_tokens = 0;
-
-                events.push(ClaudeStreamEvent::MessageStart {
-                    message: start_message,
+            for (index, content_block) in body.content.iter().enumerate() {
+                let index = index as u64;
+                out.push(ClaudeStreamEvent::ContentBlockStart {
+                    content_block: stream_start_content_block(content_block),
+                    index,
                 });
 
-                for (index, content_block) in body.content.iter().enumerate() {
-                    let index = index as u64;
-                    events.push(ClaudeStreamEvent::ContentBlockStart {
-                        content_block: stream_start_content_block(content_block),
-                        index,
-                    });
+                push_content_block_delta_events(out, index, content_block);
 
-                    push_content_block_delta_events(&mut events, index, content_block);
-
-                    events.push(ClaudeStreamEvent::ContentBlockStop { index });
-                }
-
-                events.push(ClaudeStreamEvent::MessageDelta {
-                    context_management: body.context_management.clone(),
-                    delta: BetaRawMessageDelta {
-                        container: body.container.clone(),
-                        stop_reason: body.stop_reason.clone(),
-                        stop_sequence: body.stop_sequence.clone(),
-                    },
-                    usage: BetaMessageDeltaUsage {
-                        cache_creation_input_tokens: Some(
-                            body.usage.cache_creation_input_tokens,
-                        ),
-                        cache_read_input_tokens: Some(body.usage.cache_read_input_tokens),
-                        input_tokens: Some(body.usage.input_tokens),
-                        iterations: Some(body.usage.iterations.clone()),
-                        output_tokens: body.usage.output_tokens,
-                        server_tool_use: Some(body.usage.server_tool_use.clone()),
-                    },
-                });
-
-                events.push(ClaudeStreamEvent::MessageStop {});
-
-                events
+                out.push(ClaudeStreamEvent::ContentBlockStop { index });
             }
-            ClaudeCreateMessageResponse::Error { body, .. } => {
-                vec![ClaudeStreamEvent::Error {
-                    error: body.error,
-                }]
-            }
-        })
+
+            out.push(ClaudeStreamEvent::MessageDelta {
+                context_management: body.context_management.clone(),
+                delta: BetaRawMessageDelta {
+                    container: body.container.clone(),
+                    stop_reason: body.stop_reason.clone(),
+                    stop_sequence: body.stop_sequence.clone(),
+                },
+                usage: BetaMessageDeltaUsage {
+                    cache_creation_input_tokens: Some(
+                        body.usage.cache_creation_input_tokens,
+                    ),
+                    cache_read_input_tokens: Some(body.usage.cache_read_input_tokens),
+                    input_tokens: Some(body.usage.input_tokens),
+                    iterations: Some(body.usage.iterations.clone()),
+                    output_tokens: body.usage.output_tokens,
+                    server_tool_use: Some(body.usage.server_tool_use.clone()),
+                },
+            });
+
+            out.push(ClaudeStreamEvent::MessageStop {});
+
+            Ok(())
+        }
+        ClaudeCreateMessageResponse::Error { body, .. } => {
+            out.push(ClaudeStreamEvent::Error {
+                error: body.error,
+            });
+            Ok(())
+        }
     }
 }
