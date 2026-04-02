@@ -1,3 +1,14 @@
+//! Google Gemini API wire types.
+//!
+//! - [`generate_content`] — `POST models/{model}:generateContent` (request, response)
+//! - [`stream_generate_content`] — streaming variant (NDJSON and SSE chunk types)
+//! - [`count_tokens`] — `POST models/{model}:countTokens`
+//! - [`embeddings`] / [`batch_embed_contents`] — embedding endpoints
+//! - [`model_list`] / [`model_get`] — `GET models` catalog
+//! - [`live`] — Live API WebSocket types (BidiGenerateContent)
+//! - [`generate_videos`] / [`video_content_get`] / [`video_operation_get`] — Veo video generation
+//! - [`types`] — shared types: error types, response headers
+
 pub mod types;
 
 pub mod batch_embed_contents;

@@ -1,3 +1,15 @@
+//! OpenAI API wire types.
+//!
+//! - [`create_chat_completions`] — `POST /v1/chat/completions` (request, response, stream chunks)
+//! - [`create_response`] — `POST /v1/responses` (request, response, stream events, WebSocket frames)
+//! - [`compact_response`] — `POST /v1/responses/{id}/compact`
+//! - [`count_tokens`] — `POST /v1/responses/input_tokens/count`
+//! - [`embeddings`] — `POST /v1/embeddings`
+//! - [`create_image`] / [`create_image_edit`] — image generation and editing
+//! - [`create_video`] / [`video_get`] / [`video_content_get`] — video generation (Sora)
+//! - [`model_list`] / [`model_get`] — `GET /v1/models` catalog
+//! - [`types`] — shared types: error types, model enums, common structures
+
 pub mod types;
 
 pub mod compact_response;
