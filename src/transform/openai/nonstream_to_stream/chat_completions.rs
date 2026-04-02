@@ -105,9 +105,10 @@ impl TryFrom<OpenAiChatCompletionsResponse> for Vec<ChatCompletionChunk> {
                         usage: body.usage.clone(),
                     });
                 } else if let Some(usage) = body.usage.clone()
-                    && let Some(chunk) = chunks.last_mut() {
-                        chunk.usage = Some(usage);
-                    }
+                    && let Some(chunk) = chunks.last_mut()
+                {
+                    chunk.usage = Some(usage);
+                }
 
                 Ok(chunks)
             }

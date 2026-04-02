@@ -941,11 +941,8 @@ impl OpenAiResponseToClaudeStream {
                 name,
                 ..
             } => {
-                let block_index = self.ensure_tool_block(
-                    out,
-                    &item_id,
-                    name.as_deref().unwrap_or("function"),
-                );
+                let block_index =
+                    self.ensure_tool_block(out, &item_id, name.as_deref().unwrap_or("function"));
                 if !arguments.is_empty() {
                     out.push(input_json_delta_event(block_index, arguments));
                 }

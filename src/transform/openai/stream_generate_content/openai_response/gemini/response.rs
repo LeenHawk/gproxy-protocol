@@ -582,11 +582,7 @@ impl GeminiToOpenAiResponseStream {
         );
     }
 
-    fn close_function_call(
-        &mut self,
-        out: &mut Vec<ResponseStreamEvent>,
-        item_id: String,
-    ) {
+    fn close_function_call(&mut self, out: &mut Vec<ResponseStreamEvent>, item_id: String) {
         let Some(state) = self.function_calls.remove(&item_id) else {
             return;
         };
@@ -641,11 +637,7 @@ impl GeminiToOpenAiResponseStream {
         }
     }
 
-    fn finish_output_index(
-        &mut self,
-        out: &mut Vec<ResponseStreamEvent>,
-        output_index: u64,
-    ) {
+    fn finish_output_index(&mut self, out: &mut Vec<ResponseStreamEvent>, output_index: u64) {
         self.close_message(out, output_index);
         self.close_reasoning(out, output_index);
         self.close_function_calls_for_output(out, output_index);
@@ -767,12 +759,7 @@ impl GeminiToOpenAiResponseStream {
                         }
 
                         if let Some(executable_code) = part.executable_code {
-                            self.emit_message_delta(
-                                out,
-                                output_index,
-                                executable_code.code,
-                                false,
-                            );
+                            self.emit_message_delta(out, output_index, executable_code.code, false);
                             continue;
                         }
 
@@ -802,12 +789,7 @@ impl GeminiToOpenAiResponseStream {
                         }
 
                         if let Some(file_data) = part.file_data {
-                            self.emit_message_delta(
-                                out,
-                                output_index,
-                                file_data.file_uri,
-                                false,
-                            );
+                            self.emit_message_delta(out, output_index, file_data.file_uri, false);
                         }
                     }
                 }
@@ -913,7 +895,6 @@ impl GeminiToOpenAiResponseStream {
         };
         self.finalize_into(status, None, out);
     }
-
 }
 fn output_text_part(text: String) -> ot::ResponseOutputText {
     ot::ResponseOutputText {

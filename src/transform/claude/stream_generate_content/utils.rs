@@ -54,11 +54,7 @@ pub fn start_thinking_block_event(index: u64, signature: String) -> ClaudeStream
     }
 }
 
-pub fn start_tool_use_block_event(
-    index: u64,
-    id: String,
-    name: String,
-) -> ClaudeStreamEvent {
+pub fn start_tool_use_block_event(index: u64, id: String, name: String) -> ClaudeStreamEvent {
     ClaudeStreamEvent::ContentBlockStart {
         content_block: BetaContentBlock::ToolUse(BetaToolUseBlock {
             id,

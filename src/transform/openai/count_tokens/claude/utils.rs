@@ -643,4 +643,3 @@ fn json_object_to_btree(value: &serde_json::Value) -> Option<ct::JsonObject> {
             .collect::<ct::JsonObject>(),
     )
 }
-

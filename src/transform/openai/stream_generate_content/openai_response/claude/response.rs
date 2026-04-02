@@ -303,13 +303,7 @@ impl ClaudeToOpenAiResponseStream {
             BetaContentBlock::Thinking(block) => {
                 let item_id = format!("reasoning_{index}");
                 let text = block.thinking;
-                self.emit_reasoning_part_added(
-                    out,
-                    item_id.clone(),
-                    index,
-                    text.clone(),
-                    None,
-                );
+                self.emit_reasoning_part_added(out, item_id.clone(), index, text.clone(), None);
 
                 if !text.is_empty() {
                     let delta_sequence = next_sequence_number(&mut self.next_sequence_number);
@@ -605,9 +599,7 @@ impl ClaudeToOpenAiResponseStream {
             }
             (
                 Some(ClaudeBlockState::Thinking { signature, .. }),
-                BetaRawContentBlockDelta::Signature {
-                    signature: new_sig,
-                },
+                BetaRawContentBlockDelta::Signature { signature: new_sig },
             ) => {
                 *signature = new_sig;
             }
@@ -1069,8 +1061,7 @@ impl ClaudeToOpenAiResponseStream {
                 self.cache_creation_input_tokens = message.usage.cache_creation_input_tokens;
                 self.cached_input_tokens = message.usage.cache_read_input_tokens;
                 self.output_tokens = message.usage.output_tokens;
-                self.incomplete_reason =
-                    stop_reason_to_incomplete_reason(message.stop_reason);
+                self.incomplete_reason = stop_reason_to_incomplete_reason(message.stop_reason);
 
                 self.ensure_started(out);
             }
@@ -1102,8 +1093,7 @@ impl ClaudeToOpenAiResponseStream {
                 }
                 self.output_tokens = usage.output_tokens;
                 if delta.stop_reason.is_some() {
-                    self.incomplete_reason =
-                        stop_reason_to_incomplete_reason(delta.stop_reason);
+                    self.incomplete_reason = stop_reason_to_incomplete_reason(delta.stop_reason);
                 }
 
                 self.ensure_started(out);
@@ -1150,7 +1140,6 @@ impl ClaudeToOpenAiResponseStream {
         Ok(())
     }
 }
-
 
 fn output_text_part(text: String) -> ot::ResponseOutputText {
     ot::ResponseOutputText {

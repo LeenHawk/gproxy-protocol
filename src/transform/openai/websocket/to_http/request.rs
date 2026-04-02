@@ -120,4 +120,3 @@ impl TryFrom<OpenAiCreateResponseWebSocketConnectRequest> for OpenAiCreateRespon
         OpenAiCreateResponseRequest::try_from(&value)
     }
 }
-

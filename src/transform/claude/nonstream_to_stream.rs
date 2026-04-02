@@ -151,9 +151,7 @@ pub fn nonstream_to_stream(
                     stop_sequence: body.stop_sequence.clone(),
                 },
                 usage: BetaMessageDeltaUsage {
-                    cache_creation_input_tokens: Some(
-                        body.usage.cache_creation_input_tokens,
-                    ),
+                    cache_creation_input_tokens: Some(body.usage.cache_creation_input_tokens),
                     cache_read_input_tokens: Some(body.usage.cache_read_input_tokens),
                     input_tokens: Some(body.usage.input_tokens),
                     iterations: Some(body.usage.iterations.clone()),
@@ -167,9 +165,7 @@ pub fn nonstream_to_stream(
             Ok(())
         }
         ClaudeCreateMessageResponse::Error { body, .. } => {
-            out.push(ClaudeStreamEvent::Error {
-                error: body.error,
-            });
+            out.push(ClaudeStreamEvent::Error { error: body.error });
             Ok(())
         }
     }

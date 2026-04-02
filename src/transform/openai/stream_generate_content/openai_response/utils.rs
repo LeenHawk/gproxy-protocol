@@ -11,10 +11,7 @@ pub fn next_sequence_number(next_sequence_number: &mut u64) -> u64 {
     sequence_number
 }
 
-pub fn push_stream_event(
-    out: &mut Vec<ResponseStreamEvent>,
-    stream_event: ResponseStreamEvent,
-) {
+pub fn push_stream_event(out: &mut Vec<ResponseStreamEvent>, stream_event: ResponseStreamEvent) {
     out.push(stream_event);
 }
 

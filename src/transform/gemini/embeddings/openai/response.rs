@@ -47,7 +47,10 @@ impl TryFrom<OpenAiEmbeddingsResponse> for GeminiEmbedContentResponse {
                         extra: headers.extra,
                     },
                     body: ResponseBody {
-                        embedding: GeminiContentEmbedding { values, shape: None },
+                        embedding: GeminiContentEmbedding {
+                            values,
+                            shape: None,
+                        },
                     },
                 }
             }

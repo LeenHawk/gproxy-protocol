@@ -512,4 +512,3 @@ pub fn claude_output_config_from_effort_and_format(
         None
     }
 }
-

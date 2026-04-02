@@ -14,9 +14,7 @@ use crate::claude::types::BetaError;
 #[serde(tag = "type")]
 pub enum ClaudeStreamEvent {
     #[serde(rename = "message_start")]
-    MessageStart {
-        message: BetaMessage,
-    },
+    MessageStart { message: BetaMessage },
     #[serde(rename = "content_block_start")]
     ContentBlockStart {
         content_block: BetaContentBlock,
@@ -28,9 +26,7 @@ pub enum ClaudeStreamEvent {
         index: u64,
     },
     #[serde(rename = "content_block_stop")]
-    ContentBlockStop {
-        index: u64,
-    },
+    ContentBlockStop { index: u64 },
     #[serde(rename = "message_delta")]
     MessageDelta {
         #[serde(default)]
@@ -43,9 +39,7 @@ pub enum ClaudeStreamEvent {
     #[serde(rename = "ping")]
     Ping {},
     #[serde(rename = "error")]
-    Error {
-        error: BetaError,
-    },
+    Error { error: BetaError },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -349,4 +349,3 @@ pub fn chat_stop_to_vec(stop: Option<ct::ChatCompletionStop>) -> Option<Vec<Stri
         None => None,
     }
 }
-

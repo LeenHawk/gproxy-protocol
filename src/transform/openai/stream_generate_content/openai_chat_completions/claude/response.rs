@@ -500,12 +500,7 @@ impl ClaudeToOpenAiChatCompletionsStream {
             } else {
                 default_reason.clone()
             };
-            out.push(self.make_chunk(
-                *choice_index,
-                Default::default(),
-                Some(finish_reason),
-                None,
-            ));
+            out.push(self.make_chunk(*choice_index, Default::default(), Some(finish_reason), None));
         }
 
         if let Some(last) = out.last_mut() {

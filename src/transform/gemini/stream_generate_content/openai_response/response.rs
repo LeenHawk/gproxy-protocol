@@ -10,9 +10,7 @@ use crate::openai::count_tokens::types::{
     ResponseCustomToolCallOutputContent, ResponseFunctionCallOutputContent, ResponseInputContent,
 };
 use crate::openai::create_response::response::ResponseBody as OpenAiCreateResponseBody;
-use crate::openai::create_response::stream::{
-    ResponseStreamContentPart, ResponseStreamEvent,
-};
+use crate::openai::create_response::stream::{ResponseStreamContentPart, ResponseStreamEvent};
 use crate::openai::create_response::types::{ResponseIncompleteReason, ResponseOutputItem};
 use crate::transform::gemini::stream_generate_content::utils::parse_json_object_or_empty;
 
@@ -319,11 +317,7 @@ impl OpenAiResponseToGeminiStream {
                 } else {
                     None
                 };
-                out.push(self.chunk_from_parts(
-                    Vec::new(),
-                    Some(reason),
-                    prompt_feedback,
-                ));
+                out.push(self.chunk_from_parts(Vec::new(), Some(reason), prompt_feedback));
             }
             ResponseStreamEvent::Failed { response, .. } => {
                 self.apply_response_state(&response);
@@ -381,9 +375,7 @@ impl OpenAiResponseToGeminiStream {
                     entry.arguments.push_str(&delta);
                     (entry.name.clone(), entry.arguments.clone())
                 };
-                out.push(
-                    self.function_call_chunk(item_id, snapshot.0, snapshot.1),
-                );
+                out.push(self.function_call_chunk(item_id, snapshot.0, snapshot.1));
             }
             ResponseStreamEvent::FunctionCallArgumentsDone {
                 item_id,
@@ -401,9 +393,7 @@ impl OpenAiResponseToGeminiStream {
                     entry.arguments = arguments;
                     (entry.name.clone(), entry.arguments.clone())
                 };
-                out.push(
-                    self.function_call_chunk(item_id, snapshot.0, snapshot.1),
-                );
+                out.push(self.function_call_chunk(item_id, snapshot.0, snapshot.1));
             }
             ResponseStreamEvent::McpCallArgumentsDelta { item_id, delta, .. } => {
                 let snapshot = {
@@ -417,9 +407,7 @@ impl OpenAiResponseToGeminiStream {
                     entry.arguments.push_str(&delta);
                     (entry.name.clone(), entry.arguments.clone())
                 };
-                out.push(
-                    self.function_call_chunk(item_id, snapshot.0, snapshot.1),
-                );
+                out.push(self.function_call_chunk(item_id, snapshot.0, snapshot.1));
             }
             ResponseStreamEvent::McpCallArgumentsDone {
                 item_id, arguments, ..
@@ -435,9 +423,7 @@ impl OpenAiResponseToGeminiStream {
                     entry.arguments = arguments;
                     (entry.name.clone(), entry.arguments.clone())
                 };
-                out.push(
-                    self.function_call_chunk(item_id, snapshot.0, snapshot.1),
-                );
+                out.push(self.function_call_chunk(item_id, snapshot.0, snapshot.1));
             }
             ResponseStreamEvent::CustomToolCallInputDelta { item_id, delta, .. } => {
                 let snapshot = {
@@ -451,9 +437,7 @@ impl OpenAiResponseToGeminiStream {
                     entry.arguments.push_str(&delta);
                     (entry.name.clone(), entry.arguments.clone())
                 };
-                out.push(
-                    self.function_call_chunk(item_id, snapshot.0, snapshot.1),
-                );
+                out.push(self.function_call_chunk(item_id, snapshot.0, snapshot.1));
             }
             ResponseStreamEvent::CustomToolCallInputDone { item_id, input, .. } => {
                 let snapshot = {
@@ -467,9 +451,7 @@ impl OpenAiResponseToGeminiStream {
                     entry.arguments = input;
                     (entry.name.clone(), entry.arguments.clone())
                 };
-                out.push(
-                    self.function_call_chunk(item_id, snapshot.0, snapshot.1),
-                );
+                out.push(self.function_call_chunk(item_id, snapshot.0, snapshot.1));
             }
             ResponseStreamEvent::ContentPartAdded { item_id, part, .. }
             | ResponseStreamEvent::ContentPartDone { item_id, part, .. } => match part {

@@ -94,10 +94,7 @@ pub fn websocket_messages_to_openai_nonstream_with_context(
 pub fn websocket_messages_to_openai_stream_events_with_context(
     value: &[OpenAiCreateResponseWebSocketMessageResponse],
 ) -> Result<
-    (
-        Vec<ResponseStreamEvent>,
-        OpenAiWebsocketTransformContext,
-    ),
+    (Vec<ResponseStreamEvent>, OpenAiWebsocketTransformContext),
     crate::transform::utils::TransformError,
 > {
     let mut ctx = OpenAiWebsocketTransformContext::default();

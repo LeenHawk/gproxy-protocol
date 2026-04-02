@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::claude::create_message::stream::{
-    BetaRawContentBlockDelta, ClaudeStreamEvent,
-};
+use crate::claude::create_message::stream::{BetaRawContentBlockDelta, ClaudeStreamEvent};
 use crate::claude::create_message::types::{BetaContentBlock, BetaStopReason};
 use crate::claude::types::BetaError;
 use crate::gemini::count_tokens::types::{GeminiContentRole, GeminiFunctionCall, GeminiPart};
@@ -204,7 +202,10 @@ impl ClaudeToGeminiStream {
                 self.output_tokens = message.usage.output_tokens;
                 self.sync_usage_metadata();
             }
-            ClaudeStreamEvent::ContentBlockStart { content_block, index } => {
+            ClaudeStreamEvent::ContentBlockStart {
+                content_block,
+                index,
+            } => {
                 let state = match content_block {
                     BetaContentBlock::Thinking(block) => ClaudeBlockState::Thinking {
                         signature: block.signature,
@@ -267,7 +268,11 @@ impl ClaudeToGeminiStream {
             ClaudeStreamEvent::ContentBlockStop { index } => {
                 self.blocks.remove(&index);
             }
-            ClaudeStreamEvent::MessageDelta { delta, usage, context_management: _ } => {
+            ClaudeStreamEvent::MessageDelta {
+                delta,
+                usage,
+                context_management: _,
+            } => {
                 if let Some(input_tokens) = usage.input_tokens {
                     self.input_tokens = input_tokens;
                 }
@@ -290,11 +295,7 @@ impl ClaudeToGeminiStream {
                     None
                 };
 
-                out.push(self.chunk_from_parts(
-                    Vec::new(),
-                    Some(finish_reason),
-                    prompt_feedback,
-                ));
+                out.push(self.chunk_from_parts(Vec::new(), Some(finish_reason), prompt_feedback));
             }
             ClaudeStreamEvent::MessageStop {} => {
                 self.finished = true;

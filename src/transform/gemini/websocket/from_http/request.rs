@@ -199,4 +199,3 @@ impl TryFrom<GeminiGenerateContentRequest> for GeminiLiveConnectRequest {
         GeminiLiveConnectRequest::try_from(&value)
     }
 }
-

@@ -203,9 +203,7 @@ impl OpenAiChatCompletionsToGeminiStream {
                         )
                     };
 
-                    out.push(
-                        self.function_call_chunk(snapshot.0, snapshot.1, snapshot.2, index),
-                    );
+                    out.push(self.function_call_chunk(snapshot.0, snapshot.1, snapshot.2, index));
                 }
             }
 

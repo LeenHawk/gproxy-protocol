@@ -123,7 +123,6 @@ impl GeminiToClaudeStream {
         let _ = push_tool_use_block(out, &mut self.next_block_index, id, name, input_json);
     }
 
-
     pub fn on_chunk(
         &mut self,
         chunk: GeminiGenerateContentResponseBody,
