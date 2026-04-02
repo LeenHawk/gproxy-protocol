@@ -12,3 +12,4 @@ pub mod stream_generate_content;
 pub mod stream_to_nonstream;
 pub mod video_content_get;
 pub mod video_get;
+pub mod websocket;
