@@ -6,7 +6,6 @@
 //! - [`count_tokens`] — `POST /v1/responses/input_tokens/count`
 //! - [`embeddings`] — `POST /v1/embeddings`
 //! - [`create_image`] / [`create_image_edit`] — image generation and editing
-//! - [`create_video`] / [`video_get`] / [`video_content_get`] — video generation (Sora)
 //! - [`model_list`] / [`model_get`] — `GET /v1/models` catalog
 //! - [`types`] — shared types: error types, model enums, common structures
 
@@ -18,9 +17,6 @@ pub mod create_chat_completions;
 pub mod create_image;
 pub mod create_image_edit;
 pub mod create_response;
-pub mod create_video;
 pub mod embeddings;
 pub mod model_get;
 pub mod model_list;
-pub mod video_content_get;
-pub mod video_get;
