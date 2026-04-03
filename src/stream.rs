@@ -76,3 +76,45 @@ fn trim_ascii(input: &[u8]) -> &[u8] {
         .unwrap_or(start);
     &input[start..end]
 }
+
+// ---------------------------------------------------------------------------
+// Generic newline-delimited splitters
+// ---------------------------------------------------------------------------
+
+/// Drains complete `\n`-terminated lines from `pending` into `out`,
+/// stripping trailing `\r\n`.  Empty lines are skipped.
+pub fn drain_lines(pending: &mut Vec<u8>, out: &mut Vec<Vec<u8>>) {
+    while let Some(pos) = pending.iter().position(|byte| *byte == b'\n') {
+        let mut line = pending.drain(..=pos).collect::<Vec<u8>>();
+        if line.last().copied() == Some(b'\n') {
+            line.pop();
+        }
+        if line.last().copied() == Some(b'\r') {
+            line.pop();
+        }
+        if !line.is_empty() {
+            out.push(line);
+        }
+    }
+}
+
+/// Splits `bytes` into newline-delimited lines.  Complete lines go through
+/// [`drain_lines`]; any trailing bytes without a terminating `\n` are also
+/// emitted as a final element.
+pub fn split_lines(bytes: &[u8], out: &mut Vec<Vec<u8>>) {
+    if bytes.is_empty() {
+        return;
+    }
+    let mut pending = bytes.to_vec();
+    drain_lines(&mut pending, out);
+    if !pending.is_empty() {
+        out.push(pending);
+    }
+}
+
+/// Convenience wrapper that returns owned lines instead of appending to a vec.
+pub fn split_lines_owned(bytes: &[u8]) -> Vec<Vec<u8>> {
+    let mut out = Vec::new();
+    split_lines(bytes, &mut out);
+    out
+}
