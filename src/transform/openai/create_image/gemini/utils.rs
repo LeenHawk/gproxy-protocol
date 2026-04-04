@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::gemini::count_tokens::types as gt;
 use crate::gemini::generate_content::response::ResponseBody as GeminiGenerateContentResponseBody;
 use crate::gemini::generate_content::types as gct;
