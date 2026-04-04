@@ -86,7 +86,10 @@
 
 pub mod claude;
 pub mod gemini;
+pub mod kinds;
 pub mod openai;
+
+pub use kinds::{OperationFamily, ProtocolKind};
 
 pub mod stream;
 pub mod transform;
