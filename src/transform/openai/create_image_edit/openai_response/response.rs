@@ -1,4 +1,3 @@
-use crate::openai::create_image::response::OpenAiCreateImageResponse;
 use crate::openai::create_image_edit::response::OpenAiCreateImageEditResponse;
 use crate::openai::create_response::response::OpenAiCreateResponseResponse;
 use crate::transform::openai::create_image::utils::{

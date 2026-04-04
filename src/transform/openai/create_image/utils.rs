@@ -1,5 +1,3 @@
-use std::collections::{HashMap, HashSet};
-
 use crate::openai::count_tokens::types as ot;
 use crate::openai::create_image::types as it;
 use crate::openai::create_image_edit::types as iet;
@@ -372,106 +370,6 @@ pub(crate) fn create_image_response_body_from_response(
     })
 }
 
-#[derive(Debug, Clone, Default)]
-pub(crate) struct ImageStreamContext {
-    pub created_at: Option<u64>,
-    pub background: Option<ot::ResponseImageGenerationBackground>,
-    pub output_format: Option<ot::ResponseImageGenerationOutputFormat>,
-    pub quality: Option<ot::ResponseImageGenerationQuality>,
-    pub size: Option<ot::ResponseImageGenerationSize>,
-    pub usage: Option<rt::ResponseUsage>,
-    pub results_by_item_id: HashMap<String, String>,
-    pub explicit_completed_item_ids: HashSet<String>,
-}
-
-fn remember_image_call_result(
-    results_by_item_id: &mut HashMap<String, String>,
-    item: &rt::ResponseOutputItem,
-) {
-    let rt::ResponseOutputItem::ImageGenerationCall(call) = item else {
-        return;
-    };
-
-    if !call.result.is_empty() {
-        results_by_item_id.insert(call.id.clone(), call.result.clone());
-    }
-}
-
-pub(crate) fn image_stream_context_from_response_stream(
-    events: &[crate::openai::create_response::stream::ResponseStreamEvent],
-    preferred_action: PreferredImageAction,
-) -> ImageStreamContext {
-    let mut ctx = ImageStreamContext::default();
-
-    for event in events {
-        match event {
-            crate::openai::create_response::stream::ResponseStreamEvent::Created {
-                response,
-                ..
-            }
-            | crate::openai::create_response::stream::ResponseStreamEvent::Queued {
-                response,
-                ..
-            }
-            | crate::openai::create_response::stream::ResponseStreamEvent::InProgress {
-                response,
-                ..
-            }
-            | crate::openai::create_response::stream::ResponseStreamEvent::Failed {
-                response,
-                ..
-            }
-            | crate::openai::create_response::stream::ResponseStreamEvent::Incomplete {
-                response,
-                ..
-            }
-            | crate::openai::create_response::stream::ResponseStreamEvent::Completed {
-                response,
-                ..
-            } => {
-                ctx.created_at = Some(response.created_at);
-                if let Some(tool) = image_generation_tool_from_tools(&response.tools, preferred_action) {
-                    if let Some(background) = tool.background.clone() {
-                        ctx.background = Some(background);
-                    }
-                    if let Some(output_format) = tool.output_format.clone() {
-                        ctx.output_format = Some(output_format);
-                    }
-                    if let Some(quality) = tool.quality.clone() {
-                        ctx.quality = Some(quality);
-                    }
-                    if let Some(size) = tool.size.clone() {
-                        ctx.size = Some(size);
-                    }
-                }
-                if let Some(usage) = response.usage.clone() {
-                    ctx.usage = Some(usage);
-                }
-                for item in &response.output {
-                    remember_image_call_result(&mut ctx.results_by_item_id, item);
-                }
-            }
-            crate::openai::create_response::stream::ResponseStreamEvent::OutputItemAdded {
-                item,
-                ..
-            }
-            | crate::openai::create_response::stream::ResponseStreamEvent::OutputItemDone {
-                item,
-                ..
-            } => remember_image_call_result(&mut ctx.results_by_item_id, item),
-            crate::openai::create_response::stream::ResponseStreamEvent::ImageGenerationCallCompleted {
-                item_id,
-                ..
-            } => {
-                ctx.explicit_completed_item_ids.insert(item_id.clone());
-                    }
-            _ => {}
-        }
-    }
-
-    ctx
-}
-
 pub(crate) fn stream_background_from_response_config(
     background: Option<&ot::ResponseImageGenerationBackground>,
 ) -> it::OpenAiImageBackground {
@@ -507,17 +405,6 @@ pub(crate) fn stream_quality_from_response_config_for_create_image(
     }
 }
 
-pub(crate) fn stream_quality_from_response_config_for_create_image_edit(
-    quality: Option<&ot::ResponseImageGenerationQuality>,
-) -> iet::OpenAiImageEditQuality {
-    match quality {
-        Some(ot::ResponseImageGenerationQuality::Low) => iet::OpenAiImageEditQuality::Low,
-        Some(ot::ResponseImageGenerationQuality::Medium) => iet::OpenAiImageEditQuality::Medium,
-        Some(ot::ResponseImageGenerationQuality::High) => iet::OpenAiImageEditQuality::High,
-        Some(ot::ResponseImageGenerationQuality::Auto) | None => iet::OpenAiImageEditQuality::Auto,
-    }
-}
-
 pub(crate) fn stream_size_from_response_config_for_create_image(
     size: Option<&ot::ResponseImageGenerationSize>,
 ) -> it::OpenAiImageSize {
@@ -526,17 +413,6 @@ pub(crate) fn stream_size_from_response_config_for_create_image(
         Some(ot::ResponseImageGenerationSize::S1024x1536) => it::OpenAiImageSize::S1024x1536,
         Some(ot::ResponseImageGenerationSize::S1536x1024) => it::OpenAiImageSize::S1536x1024,
         Some(ot::ResponseImageGenerationSize::Auto) | None => it::OpenAiImageSize::Auto,
-    }
-}
-
-pub(crate) fn stream_size_from_response_config_for_create_image_edit(
-    size: Option<&ot::ResponseImageGenerationSize>,
-) -> iet::OpenAiImageEditSize {
-    match size {
-        Some(ot::ResponseImageGenerationSize::S1024x1024) => iet::OpenAiImageEditSize::S1024x1024,
-        Some(ot::ResponseImageGenerationSize::S1024x1536) => iet::OpenAiImageEditSize::S1024x1536,
-        Some(ot::ResponseImageGenerationSize::S1536x1024) => iet::OpenAiImageEditSize::S1536x1024,
-        Some(ot::ResponseImageGenerationSize::Auto) | None => iet::OpenAiImageEditSize::Auto,
     }
 }
 

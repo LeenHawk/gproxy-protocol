@@ -2,12 +2,11 @@ use std::collections::HashMap;
 
 use crate::openai::count_tokens::types as ot;
 use crate::openai::create_image::stream::ImageGenerationStreamEvent;
-use crate::openai::create_image::types as it;
 use crate::openai::create_response::response::ResponseBody;
 use crate::openai::create_response::stream::ResponseStreamEvent;
 use crate::openai::create_response::types as rt;
 use crate::transform::openai::create_image::utils::{
-    PreferredImageAction, best_effort_image_usage_from_response_usage,
+    best_effort_image_usage_from_response_usage,
     stream_background_from_response_config, stream_error_from_response_error,
     stream_output_format_from_response_config, stream_quality_from_response_config_for_create_image,
     stream_size_from_response_config_for_create_image,
