@@ -60,9 +60,7 @@ fn create_image_edit_to_response_request(
             iet::OpenAiImageEditInputFidelity::High => {
                 ot::ResponseImageGenerationInputFidelity::High
             }
-            iet::OpenAiImageEditInputFidelity::Low => {
-                ot::ResponseImageGenerationInputFidelity::Low
-            }
+            iet::OpenAiImageEditInputFidelity::Low => ot::ResponseImageGenerationInputFidelity::Low,
         }),
         input_image_mask: body
             .mask

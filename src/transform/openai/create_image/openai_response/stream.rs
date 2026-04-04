@@ -6,9 +6,9 @@ use crate::openai::create_response::response::ResponseBody;
 use crate::openai::create_response::stream::ResponseStreamEvent;
 use crate::openai::create_response::types as rt;
 use crate::transform::openai::create_image::utils::{
-    best_effort_image_usage_from_response_usage,
-    stream_background_from_response_config, stream_error_from_response_error,
-    stream_output_format_from_response_config, stream_quality_from_response_config_for_create_image,
+    best_effort_image_usage_from_response_usage, stream_background_from_response_config,
+    stream_error_from_response_error, stream_output_format_from_response_config,
+    stream_quality_from_response_config_for_create_image,
     stream_size_from_response_config_for_create_image,
 };
 
@@ -69,11 +69,7 @@ impl ResponseStreamToImageStream {
         }
     }
 
-    fn emit_partial(
-        &mut self,
-        b64_json: String,
-        out: &mut Vec<ImageGenerationStreamEvent>,
-    ) {
+    fn emit_partial(&mut self, b64_json: String, out: &mut Vec<ImageGenerationStreamEvent>) {
         let index = self.partial_count;
         self.partial_count += 1;
         out.push(ImageGenerationStreamEvent::PartialImage {
@@ -87,11 +83,7 @@ impl ResponseStreamToImageStream {
         });
     }
 
-    fn emit_completed(
-        &mut self,
-        b64_json: String,
-        out: &mut Vec<ImageGenerationStreamEvent>,
-    ) {
+    fn emit_completed(&mut self, b64_json: String, out: &mut Vec<ImageGenerationStreamEvent>) {
         out.push(ImageGenerationStreamEvent::Completed {
             b64_json,
             background: stream_background_from_response_config(self.background.as_ref()),
@@ -178,11 +170,7 @@ impl ResponseStreamToImageStream {
             // Error
             ResponseStreamEvent::Error { error, .. } => {
                 out.push(ImageGenerationStreamEvent::Error {
-                    error: stream_error_from_response_error(
-                        error.code,
-                        error.message,
-                        error.param,
-                    ),
+                    error: stream_error_from_response_error(error.code, error.message, error.param),
                 });
                 self.finished = true;
             }

@@ -14,7 +14,9 @@ use crate::gemini::types::GeminiResponseHeaders;
 use crate::transform::gemini::websocket::context::GeminiWebsocketTransformContext;
 use crate::transform::utils::TransformError;
 
-pub fn usage_live_to_generate(usage: Option<GeminiLiveUsageMetadata>) -> Option<GeminiUsageMetadata> {
+pub fn usage_live_to_generate(
+    usage: Option<GeminiLiveUsageMetadata>,
+) -> Option<GeminiUsageMetadata> {
     usage.map(|usage| GeminiUsageMetadata {
         prompt_token_count: usage.prompt_token_count,
         cached_content_token_count: usage.cached_content_token_count,

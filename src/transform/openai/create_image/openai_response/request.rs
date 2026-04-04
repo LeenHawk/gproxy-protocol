@@ -81,7 +81,9 @@ fn create_image_to_response_request(
         body: ResponseRequestBody {
             model: Some(model),
             input: Some(input),
-            tools: Some(vec![crate::openai::create_response::types::ResponseTool::ImageGeneration(image_tool)]),
+            tools: Some(vec![
+                crate::openai::create_response::types::ResponseTool::ImageGeneration(image_tool),
+            ]),
             tool_choice: Some(image_tool_choice()),
             stream: Some(true),
             user: body.user.clone(),
