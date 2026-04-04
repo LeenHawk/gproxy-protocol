@@ -28,7 +28,7 @@
 //!
 //! let json = r#"{"model": "gpt-4", "messages": [{"role": "user", "content": "Hello"}]}"#;
 //! let body: RequestBody = serde_json::from_str(json).unwrap();
-//! assert_eq!(body.model.as_deref(), Some("gpt-4"));
+//! assert_eq!(body.model, "gpt-4");
 //! ```
 //!
 //! ## Cross-Protocol Transforms
