@@ -987,11 +987,3 @@ fn function_tool_call_item(
         status,
     })
 }
-
-fn response_error_code_from_gemini_status(status: &str) -> rt::ResponseErrorCode {
-    match status {
-        "invalid_argument" | "failed_precondition" => rt::ResponseErrorCode::InvalidPrompt,
-        "resource_exhausted" => rt::ResponseErrorCode::RateLimitExceeded,
-        _ => rt::ResponseErrorCode::ServerError,
-    }
-}
