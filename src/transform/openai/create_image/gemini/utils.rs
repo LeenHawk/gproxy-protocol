@@ -8,13 +8,13 @@ use crate::openai::types::OpenAiResponseHeaders;
 use crate::transform::utils::TransformError;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct GeminiGeneratedImageOutput {
+pub struct GeminiGeneratedImageOutput {
     pub image: it::OpenAiGeneratedImage,
     pub output_format: Option<it::OpenAiImageOutputFormat>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct GeminiInlineImageOutput {
+pub struct GeminiInlineImageOutput {
     pub candidate_index: u32,
     pub part_index: usize,
     pub b64_json: String,
@@ -191,7 +191,7 @@ pub(crate) fn gemini_generated_image_outputs_from_response(
     outputs
 }
 
-pub(crate) fn gemini_inline_image_outputs_from_response(
+pub fn gemini_inline_image_outputs_from_response(
     body: &GeminiGenerateContentResponseBody,
 ) -> Vec<GeminiInlineImageOutput> {
     let mut outputs = Vec::new();
@@ -287,7 +287,7 @@ pub(crate) fn openai_image_usage_from_gemini(
     })
 }
 
-pub(crate) fn best_effort_openai_image_usage_from_gemini(
+pub fn best_effort_openai_image_usage_from_gemini(
     usage: Option<&gct::GeminiUsageMetadata>,
 ) -> it::OpenAiImageUsage {
     openai_image_usage_from_gemini(usage).unwrap_or(it::OpenAiImageUsage {
