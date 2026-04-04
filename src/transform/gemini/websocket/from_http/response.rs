@@ -12,7 +12,7 @@ use crate::gemini::stream_generate_content::response::GeminiStreamGenerateConten
 use crate::transform::gemini::websocket::context::GeminiWebsocketTransformContext;
 use crate::transform::utils::TransformError;
 
-fn usage_generate_to_live(usage: Option<GeminiUsageMetadata>) -> Option<GeminiLiveUsageMetadata> {
+pub fn usage_generate_to_live(usage: Option<GeminiUsageMetadata>) -> Option<GeminiLiveUsageMetadata> {
     usage.map(|usage| GeminiLiveUsageMetadata {
         prompt_token_count: usage.prompt_token_count,
         cached_content_token_count: usage.cached_content_token_count,
@@ -27,7 +27,7 @@ fn usage_generate_to_live(usage: Option<GeminiUsageMetadata>) -> Option<GeminiLi
     })
 }
 
-fn candidate_to_server_message(
+pub fn candidate_to_server_message(
     candidate: GeminiCandidate,
     usage_metadata: Option<GeminiLiveUsageMetadata>,
 ) -> Option<GeminiLiveMessageResponse> {
