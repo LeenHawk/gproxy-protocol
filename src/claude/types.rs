@@ -222,6 +222,55 @@ pub enum BetaModelType {
     Model,
 }
 
+// ---------------------------------------------------------------------------
+// Files API types (beta)
+// ---------------------------------------------------------------------------
+
+/// Metadata for a file stored via the Files API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileMetadata {
+    /// Unique object identifier (format may change over time).
+    pub id: String,
+    /// RFC 3339 datetime representing when the file was created.
+    pub created_at: String,
+    /// Original filename of the uploaded file.
+    pub filename: String,
+    /// MIME type of the file.
+    pub mime_type: String,
+    /// Size of the file in bytes.
+    pub size_bytes: u64,
+    /// Object type — always `"file"`.
+    #[serde(rename = "type")]
+    pub type_: FileObjectType,
+    /// Whether the file can be downloaded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downloadable: Option<bool>,
+}
+
+/// Object type tag for file metadata — always `"file"`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FileObjectType {
+    #[serde(rename = "file")]
+    File,
+}
+
+/// Response returned when a file is deleted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletedFile {
+    /// ID of the deleted file.
+    pub id: String,
+    /// Deleted object type — always `"file_deleted"`.
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub type_: Option<DeletedFileType>,
+}
+
+/// Object type tag for deleted file — always `"file_deleted"`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeletedFileType {
+    #[serde(rename = "file_deleted")]
+    FileDeleted,
+}
+
 /// Typed beta error codes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BetaErrorType {
