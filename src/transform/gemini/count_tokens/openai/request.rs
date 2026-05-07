@@ -141,6 +141,7 @@ impl TryFrom<GeminiCountTokensRequest> for OpenAiCountTokensRequest {
                             content: None,
                             encrypted_content: None,
                             status: None,
+                            signature: None,
                         }));
                     } else {
                         message_content.push(ResponseInputContent::Text(ResponseInputText {
@@ -471,6 +472,8 @@ impl TryFrom<GeminiCountTokensRequest> for OpenAiCountTokensRequest {
                     effort: Some(effort),
                     generate_summary: None,
                     summary: None,
+                    enabled: None,
+                    max_tokens: None,
                 });
 
             let schema_value = config

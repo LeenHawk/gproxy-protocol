@@ -85,20 +85,23 @@ impl TryFrom<ClaudeCreateMessageResponse> for OpenAiCreateResponseResponse {
                         }
                     }
                     crate::claude::create_message::types::BetaContentBlock::Thinking(block) => {
+                        let signature = block.signature;
+                        let thinking = block.thinking;
                         output.push(rt::ResponseOutputItem::ReasoningItem(
                             ot::ResponseReasoningItem {
                                 id: Some(format!("reasoning_{index}")),
                                 summary: vec![ot::ResponseSummaryTextContent {
-                                    text: block.thinking.clone(),
+                                    text: thinking.clone(),
                                     type_: ot::ResponseSummaryTextContentType::SummaryText,
                                 }],
                                 type_: ot::ResponseReasoningItemType::Reasoning,
                                 content: Some(vec![ot::ResponseReasoningTextContent {
-                                    text: block.thinking,
+                                    text: thinking,
                                     type_: ot::ResponseReasoningTextContentType::ReasoningText,
                                 }]),
                                 encrypted_content: None,
                                 status: Some(ot::ResponseItemStatus::Completed),
+                                signature: Some(signature),
                             },
                         ));
                     }
@@ -113,6 +116,7 @@ impl TryFrom<ClaudeCreateMessageResponse> for OpenAiCreateResponseResponse {
                                 content: None,
                                 encrypted_content: Some(block.data),
                                 status: Some(ot::ResponseItemStatus::Completed),
+                                signature: None,
                             },
                         ));
                     }

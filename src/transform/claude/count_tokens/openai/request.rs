@@ -1,7 +1,8 @@
 use crate::claude::count_tokens::request::ClaudeCountTokensRequest;
 use crate::claude::count_tokens::types::{
-    BetaMessageRole, BetaOutputEffort, BetaThinkingConfigParam, BetaToolChoice,
-    BetaToolInputSchema, BetaToolInputSchemaType, BetaToolUnion,
+    BetaContentBlockParam, BetaMessageContent, BetaMessageRole, BetaOutputEffort,
+    BetaThinkingConfigParam, BetaToolChoice, BetaToolInputSchema, BetaToolInputSchemaType,
+    BetaToolUnion,
 };
 use crate::openai::count_tokens::request::{
     OpenAiCountTokensRequest, PathParameters, QueryParameters, RequestBody, RequestHeaders,
@@ -15,14 +16,16 @@ use crate::openai::count_tokens::types::{
     ResponseFormatTextJsonSchemaConfigType, ResponseFunctionShellTool,
     ResponseFunctionShellToolType, ResponseFunctionTool, ResponseFunctionToolType, ResponseInput,
     ResponseInputItem, ResponseInputMessage, ResponseInputMessageContent, ResponseInputMessageRole,
-    ResponseInputMessageType, ResponseMcpAllowedTools, ResponseMcpTool, ResponseMcpToolType,
-    ResponseReasoning, ResponseReasoningEffort, ResponseTextConfig, ResponseTextFormatConfig,
-    ResponseTool, ResponseToolChoice, ResponseToolChoiceFunction, ResponseToolChoiceFunctionType,
-    ResponseToolChoiceOptions, ResponseTruncation, ResponseWebSearchFilters, ResponseWebSearchTool,
-    ResponseWebSearchToolType,
+    ResponseInputMessageType, ResponseItemStatus, ResponseMcpAllowedTools, ResponseMcpTool,
+    ResponseMcpToolType, ResponseReasoning, ResponseReasoningEffort, ResponseReasoningItem,
+    ResponseReasoningItemType, ResponseReasoningTextContent, ResponseReasoningTextContentType,
+    ResponseSummaryTextContent, ResponseSummaryTextContentType, ResponseTextConfig,
+    ResponseTextFormatConfig, ResponseTool, ResponseToolChoice, ResponseToolChoiceFunction,
+    ResponseToolChoiceFunctionType, ResponseToolChoiceOptions, ResponseTruncation,
+    ResponseWebSearchFilters, ResponseWebSearchTool, ResponseWebSearchToolType,
 };
 use crate::transform::claude::count_tokens::utils::{
-    beta_message_content_to_text, beta_system_prompt_to_text, claude_model_to_string,
+    beta_system_prompt_to_text, claude_model_to_string,
 };
 use crate::transform::utils::TransformError;
 use serde_json::{Map, Value};
@@ -48,30 +51,124 @@ fn tool_input_schema_to_json_object(
     parameters
 }
 
+fn push_response_message(
+    input_items: &mut Vec<ResponseInputItem>,
+    role: ResponseInputMessageRole,
+    text: String,
+) {
+    input_items.push(ResponseInputItem::Message(ResponseInputMessage {
+        content: ResponseInputMessageContent::Text(text),
+        role,
+        phase: None,
+        status: None,
+        type_: Some(ResponseInputMessageType::Message),
+    }));
+}
+
+fn push_reasoning_item(
+    input_items: &mut Vec<ResponseInputItem>,
+    id: Option<String>,
+    text: Option<String>,
+    encrypted_content: Option<String>,
+    signature: Option<String>,
+) {
+    let summary = text
+        .as_ref()
+        .filter(|text| !text.is_empty())
+        .map(|text| {
+            vec![ResponseSummaryTextContent {
+                text: text.clone(),
+                type_: ResponseSummaryTextContentType::SummaryText,
+            }]
+        })
+        .unwrap_or_default();
+    let content = text.filter(|text| !text.is_empty()).map(|text| {
+        vec![ResponseReasoningTextContent {
+            text,
+            type_: ResponseReasoningTextContentType::ReasoningText,
+        }]
+    });
+
+    input_items.push(ResponseInputItem::ReasoningItem(ResponseReasoningItem {
+        id,
+        summary,
+        type_: ResponseReasoningItemType::Reasoning,
+        content,
+        encrypted_content,
+        status: Some(ResponseItemStatus::Completed),
+        signature,
+    }));
+}
+
 impl TryFrom<ClaudeCountTokensRequest> for OpenAiCountTokensRequest {
     type Error = TransformError;
 
     fn try_from(value: ClaudeCountTokensRequest) -> Result<Self, TransformError> {
         let model = claude_model_to_string(&value.body.model);
-        let input_items = value
-            .body
-            .messages
-            .into_iter()
-            .map(|message| {
-                ResponseInputItem::Message(ResponseInputMessage {
-                    content: ResponseInputMessageContent::Text(beta_message_content_to_text(
-                        &message.content,
-                    )),
-                    role: match message.role {
-                        BetaMessageRole::User => ResponseInputMessageRole::User,
-                        BetaMessageRole::Assistant => ResponseInputMessageRole::Assistant,
-                    },
-                    phase: None,
-                    status: None,
-                    type_: Some(ResponseInputMessageType::Message),
-                })
-            })
-            .collect::<Vec<_>>();
+        let mut input_items = Vec::new();
+        let mut redacted_reasoning_index = 0usize;
+        for message in value.body.messages {
+            let role = match message.role {
+                BetaMessageRole::User => ResponseInputMessageRole::User,
+                BetaMessageRole::Assistant => ResponseInputMessageRole::Assistant,
+            };
+            match message.content {
+                BetaMessageContent::Text(text) => {
+                    push_response_message(&mut input_items, role, text)
+                }
+                BetaMessageContent::Blocks(blocks) => {
+                    let mut text_parts = Vec::new();
+                    for block in blocks {
+                        match block {
+                            BetaContentBlockParam::Text(block) => text_parts.push(block.text),
+                            BetaContentBlockParam::Thinking(block)
+                                if matches!(role, ResponseInputMessageRole::Assistant) =>
+                            {
+                                if !text_parts.is_empty() {
+                                    push_response_message(
+                                        &mut input_items,
+                                        role.clone(),
+                                        std::mem::take(&mut text_parts).join("\n"),
+                                    );
+                                }
+                                let signature = block.signature;
+                                push_reasoning_item(
+                                    &mut input_items,
+                                    Some(signature.clone()),
+                                    Some(block.thinking),
+                                    None,
+                                    Some(signature),
+                                );
+                            }
+                            BetaContentBlockParam::RedactedThinking(block)
+                                if matches!(role, ResponseInputMessageRole::Assistant) =>
+                            {
+                                if !text_parts.is_empty() {
+                                    push_response_message(
+                                        &mut input_items,
+                                        role.clone(),
+                                        std::mem::take(&mut text_parts).join("\n"),
+                                    );
+                                }
+                                let id = format!("redacted_reasoning_{redacted_reasoning_index}");
+                                redacted_reasoning_index += 1;
+                                push_reasoning_item(
+                                    &mut input_items,
+                                    Some(id),
+                                    None,
+                                    Some(block.data),
+                                    None,
+                                );
+                            }
+                            _ => text_parts.push("[unsupported_content_block]".to_string()),
+                        }
+                    }
+                    if !text_parts.is_empty() {
+                        push_response_message(&mut input_items, role, text_parts.join("\n"));
+                    }
+                }
+            }
+        }
         let instructions = beta_system_prompt_to_text(value.body.system);
         let parallel_tool_calls = match value.body.tool_choice.as_ref() {
             Some(BetaToolChoice::Auto(choice)) => choice.disable_parallel_tool_use.map(|v| !v),
@@ -133,6 +230,8 @@ impl TryFrom<ClaudeCountTokensRequest> for OpenAiCountTokensRequest {
                 effort: Some(effort),
                 generate_summary: None,
                 summary: None,
+                enabled: None,
+                max_tokens: None,
             });
         let output_schema = value
             .body
@@ -343,5 +442,68 @@ impl TryFrom<ClaudeCountTokensRequest> for OpenAiCountTokensRequest {
                 ..RequestBody::default()
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claude_count_tokens_thinking_blocks_map_to_response_reasoning_items() {
+        let request = ClaudeCountTokensRequest {
+            body: crate::claude::count_tokens::request::RequestBody {
+                messages: vec![crate::claude::count_tokens::types::BetaMessageParam {
+                    role: BetaMessageRole::Assistant,
+                    content: BetaMessageContent::Blocks(vec![
+                        BetaContentBlockParam::Thinking(
+                            crate::claude::count_tokens::types::BetaThinkingBlockParam {
+                                signature: "sig_count".to_string(),
+                                thinking: "count thinking".to_string(),
+                                type_: crate::claude::count_tokens::types::BetaThinkingBlockType::Thinking,
+                            },
+                        ),
+                        BetaContentBlockParam::RedactedThinking(
+                            crate::claude::count_tokens::types::BetaRedactedThinkingBlockParam {
+                                data: "cipher_count".to_string(),
+                                type_: crate::claude::count_tokens::types::BetaRedactedThinkingBlockType::RedactedThinking,
+                            },
+                        ),
+                    ]),
+                }],
+                model: crate::claude::count_tokens::types::Model::Custom(
+                    "claude-test".to_string(),
+                ),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let converted = OpenAiCountTokensRequest::try_from(request).expect("request converts");
+        let Some(ResponseInput::Items(items)) = converted.body.input else {
+            panic!("expected response input items");
+        };
+        let reasoning = items
+            .iter()
+            .filter_map(|item| match item {
+                ResponseInputItem::ReasoningItem(item) => Some(item),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(reasoning.len(), 2);
+        assert_eq!(reasoning[0].signature.as_deref(), Some("sig_count"));
+        assert_eq!(
+            reasoning[0]
+                .content
+                .as_ref()
+                .and_then(|content| content.first())
+                .map(|part| part.text.as_str()),
+            Some("count thinking")
+        );
+        assert_eq!(
+            reasoning[1].encrypted_content.as_deref(),
+            Some("cipher_count")
+        );
     }
 }

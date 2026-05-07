@@ -1,4 +1,4 @@
-use crate::claude::count_tokens::types::BetaToolUseBlockType;
+use crate::claude::count_tokens::types::{BetaContentBlockParam, BetaToolUseBlockType};
 use crate::claude::create_message::response::ClaudeCreateMessageResponse;
 use crate::claude::create_message::types::{
     BetaContentBlock, BetaMessage, BetaMessageRole, BetaMessageType, BetaServiceTier,
@@ -13,7 +13,18 @@ use crate::transform::claude::generate_content::utils::{
     beta_usage_from_counts, parse_json_object_or_empty,
 };
 use crate::transform::claude::utils::beta_error_response_from_status_message;
+use crate::transform::openai::generate_content::openai_chat_completions::claude::utils::chat_reasoning_to_claude_blocks;
 use crate::transform::utils::TransformError;
+
+fn reasoning_response_block(block: BetaContentBlockParam) -> Option<BetaContentBlock> {
+    match block {
+        BetaContentBlockParam::Thinking(block) => Some(BetaContentBlock::Thinking(block)),
+        BetaContentBlockParam::RedactedThinking(block) => {
+            Some(BetaContentBlock::RedactedThinking(block))
+        }
+        _ => None,
+    }
+}
 
 impl TryFrom<OpenAiChatCompletionsResponse> for ClaudeCreateMessageResponse {
     type Error = TransformError;
@@ -32,6 +43,15 @@ impl TryFrom<OpenAiChatCompletionsResponse> for ClaudeCreateMessageResponse {
                 let finish_reason = choice.as_ref().map(|choice| choice.finish_reason.clone());
 
                 if let Some(choice) = choice {
+                    content.extend(
+                        chat_reasoning_to_claude_blocks(
+                            choice.message.reasoning_content.clone(),
+                            choice.message.reasoning_details.clone(),
+                        )
+                        .into_iter()
+                        .filter_map(reasoning_response_block),
+                    );
+
                     if let Some(text) = choice.message.content {
                         content.push(BetaContentBlock::Text(BetaTextBlock {
                             citations: None,

@@ -233,6 +233,8 @@ pub fn chat_reasoning_to_response_reasoning(
         }),
         generate_summary: None,
         summary: None,
+        enabled: None,
+        max_tokens: None,
     })
 }
 

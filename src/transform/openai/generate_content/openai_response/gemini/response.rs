@@ -113,6 +113,7 @@ impl TryFrom<GeminiGenerateContentResponse> for OpenAiCreateResponseResponse {
                                                 }]),
                                                 encrypted_content: None,
                                                 status: Some(ot::ResponseItemStatus::Completed),
+                                                signature: None,
                                             },
                                         ));
                                 }

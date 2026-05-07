@@ -1,4 +1,6 @@
-use super::utils::{parse_tool_use_input, system_text_block, text_block};
+use super::utils::{
+    chat_reasoning_to_claude_blocks, parse_tool_use_input, system_text_block, text_block,
+};
 use crate::claude::count_tokens::types as ct;
 use crate::claude::create_message::request::{
     ClaudeCreateMessageRequest, PathParameters, QueryParameters, RequestBody, RequestHeaders,
@@ -112,6 +114,8 @@ impl TryFrom<OpenAiChatCompletionsRequest> for ClaudeCreateMessageRequest {
                     seen_non_system = true;
                     let oct::ChatCompletionAssistantMessageParam {
                         content,
+                        reasoning_content,
+                        reasoning_details,
                         refusal,
                         function_call,
                         tool_calls,
@@ -144,6 +148,11 @@ impl TryFrom<OpenAiChatCompletionsRequest> for ClaudeCreateMessageRequest {
                             }
                         }
                     }
+
+                    blocks.extend(chat_reasoning_to_claude_blocks(
+                        reasoning_content,
+                        reasoning_details,
+                    ));
 
                     if let Some(refusal) = refusal
                         && !refusal.is_empty()

@@ -372,6 +372,66 @@ pub fn openai_reasoning_to_claude(
     })
 }
 
+fn non_empty(value: Option<String>) -> Option<String> {
+    value.filter(|text| !text.is_empty())
+}
+
+pub fn openai_reasoning_item_visible_text(reasoning: &ot::ResponseReasoningItem) -> String {
+    if let Some(content) = reasoning.content.as_ref() {
+        let text = content
+            .iter()
+            .map(|part| part.text.as_str())
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        if !text.is_empty() {
+            return text;
+        }
+    }
+
+    reasoning
+        .summary
+        .iter()
+        .map(|part| part.text.as_str())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn openai_reasoning_item_signature(reasoning: &ot::ResponseReasoningItem) -> Option<String> {
+    non_empty(reasoning.signature.clone()).or_else(|| non_empty(reasoning.id.clone()))
+}
+
+pub fn openai_reasoning_item_to_claude_blocks(
+    reasoning: ot::ResponseReasoningItem,
+) -> Vec<ct::BetaContentBlockParam> {
+    let mut blocks = Vec::new();
+    let thinking = openai_reasoning_item_visible_text(&reasoning);
+
+    if !thinking.is_empty()
+        && let Some(signature) = openai_reasoning_item_signature(&reasoning)
+    {
+        blocks.push(ct::BetaContentBlockParam::Thinking(
+            ct::BetaThinkingBlockParam {
+                signature,
+                thinking,
+                type_: ct::BetaThinkingBlockType::Thinking,
+            },
+        ));
+    }
+
+    if let Some(data) = non_empty(reasoning.encrypted_content) {
+        blocks.push(ct::BetaContentBlockParam::RedactedThinking(
+            ct::BetaRedactedThinkingBlockParam {
+                data,
+                type_: ct::BetaRedactedThinkingBlockType::RedactedThinking,
+            },
+        ));
+    }
+
+    blocks
+}
+
 pub fn parallel_disable(parallel_tool_calls: Option<bool>) -> Option<bool> {
     parallel_tool_calls.map(|enabled| !enabled)
 }
@@ -683,6 +743,8 @@ mod tests {
             effort: Some(effort),
             generate_summary: None,
             summary: None,
+            enabled: None,
+            max_tokens: None,
         }
     }
 
@@ -708,5 +770,35 @@ mod tests {
         .expect("thinking config");
 
         assert!(matches!(thinking, ct::BetaThinkingConfigParam::Enabled(_)));
+    }
+
+    #[test]
+    fn response_reasoning_item_maps_visible_and_encrypted_to_claude_blocks() {
+        let blocks = super::openai_reasoning_item_to_claude_blocks(ot::ResponseReasoningItem {
+            id: Some("fallback_id".to_string()),
+            summary: vec![ot::ResponseSummaryTextContent {
+                text: "summary".to_string(),
+                type_: ot::ResponseSummaryTextContentType::SummaryText,
+            }],
+            type_: ot::ResponseReasoningItemType::Reasoning,
+            content: Some(vec![ot::ResponseReasoningTextContent {
+                text: "visible thinking".to_string(),
+                type_: ot::ResponseReasoningTextContentType::ReasoningText,
+            }]),
+            encrypted_content: Some("ciphertext".to_string()),
+            status: Some(ot::ResponseItemStatus::Completed),
+            signature: Some("sig_native".to_string()),
+        });
+
+        assert!(matches!(
+            &blocks[0],
+            ct::BetaContentBlockParam::Thinking(block)
+                if block.signature == "sig_native" && block.thinking == "visible thinking"
+        ));
+        assert!(matches!(
+            &blocks[1],
+            ct::BetaContentBlockParam::RedactedThinking(block)
+                if block.data == "ciphertext"
+        ));
     }
 }

@@ -230,12 +230,14 @@ impl ClaudeToOpenAiResponseStream {
         output_index: u64,
         text: String,
         encrypted_content: Option<String>,
+        signature: Option<String>,
     ) {
         let item = reasoning_item(
             item_id.clone(),
             text.clone(),
             encrypted_content,
             ot::ResponseItemStatus::InProgress,
+            signature,
         );
         let part = ResponseStreamContentPart::ReasoningText(reasoning_text_part(text));
 
@@ -303,7 +305,15 @@ impl ClaudeToOpenAiResponseStream {
             BetaContentBlock::Thinking(block) => {
                 let item_id = format!("reasoning_{index}");
                 let text = block.thinking;
-                self.emit_reasoning_part_added(out, item_id.clone(), index, text.clone(), None);
+                let signature = block.signature;
+                self.emit_reasoning_part_added(
+                    out,
+                    item_id.clone(),
+                    index,
+                    text.clone(),
+                    None,
+                    Some(signature.clone()),
+                );
 
                 if !text.is_empty() {
                     let delta_sequence = next_sequence_number(&mut self.next_sequence_number);
@@ -325,7 +335,7 @@ impl ClaudeToOpenAiResponseStream {
                     ClaudeBlockState::Thinking {
                         item_id,
                         text,
-                        signature: block.signature,
+                        signature,
                     },
                 );
             }
@@ -342,6 +352,7 @@ impl ClaudeToOpenAiResponseStream {
                             String::new(),
                             Some(encrypted_content.clone()),
                             ot::ResponseItemStatus::InProgress,
+                            None,
                         ),
                         output_index: index,
                         sequence_number: output_item_sequence,
@@ -729,7 +740,11 @@ impl ClaudeToOpenAiResponseStream {
                     },
                 );
             }
-            ClaudeBlockState::Thinking { item_id, text, .. } => {
+            ClaudeBlockState::Thinking {
+                item_id,
+                text,
+                signature,
+            } => {
                 let done_sequence = next_sequence_number(&mut self.next_sequence_number);
                 push_stream_event(
                     out,
@@ -820,6 +835,7 @@ impl ClaudeToOpenAiResponseStream {
                             text,
                             None,
                             ot::ResponseItemStatus::Completed,
+                            Some(signature),
                         ),
                         output_index: index,
                         sequence_number: output_done_sequence,
@@ -839,6 +855,7 @@ impl ClaudeToOpenAiResponseStream {
                             String::new(),
                             Some(encrypted_content),
                             ot::ResponseItemStatus::Completed,
+                            None,
                         ),
                         output_index: index,
                         sequence_number: output_done_sequence,
@@ -1174,6 +1191,7 @@ fn reasoning_item(
     text: String,
     encrypted_content: Option<String>,
     status: ot::ResponseItemStatus,
+    signature: Option<String>,
 ) -> rt::ResponseOutputItem {
     let summary = if text.is_empty() {
         Vec::new()
@@ -1193,6 +1211,7 @@ fn reasoning_item(
         content,
         encrypted_content,
         status: Some(status),
+        signature,
     })
 }
 

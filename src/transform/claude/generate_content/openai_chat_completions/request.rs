@@ -21,6 +21,7 @@ use crate::openai::create_chat_completions::types::{
     ChatCompletionMessageFunctionToolCall, ChatCompletionMessageFunctionToolCallType,
     ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionNamedFunction,
     ChatCompletionNamedToolChoice, ChatCompletionNamedToolChoiceType,
+    ChatCompletionReasoningDetail, ChatCompletionReasoningDetailType,
     ChatCompletionReasoningEffort, ChatCompletionResponseFormat,
     ChatCompletionResponseFormatJsonSchema, ChatCompletionResponseFormatJsonSchemaConfig,
     ChatCompletionResponseFormatJsonSchemaType, ChatCompletionServiceTier, ChatCompletionStop,
@@ -35,6 +36,32 @@ use crate::transform::claude::generate_content::utils::{
 };
 use crate::transform::utils::TransformError;
 use serde_json::{Map, Value};
+
+fn chat_reasoning_text_detail(
+    index: u64,
+    signature: String,
+    text: String,
+) -> ChatCompletionReasoningDetail {
+    ChatCompletionReasoningDetail {
+        type_: ChatCompletionReasoningDetailType::ReasoningText,
+        id: Some(signature.clone()),
+        data: None,
+        text: Some(text),
+        signature: Some(signature),
+        index: Some(index),
+    }
+}
+
+fn chat_reasoning_encrypted_detail(index: u64, data: String) -> ChatCompletionReasoningDetail {
+    ChatCompletionReasoningDetail {
+        type_: ChatCompletionReasoningDetailType::ReasoningEncrypted,
+        id: Some(format!("redacted_reasoning_{index}")),
+        data: Some(data),
+        text: None,
+        signature: None,
+        index: Some(index),
+    }
+}
 
 fn tool_input_schema_to_function_parameters(
     input_schema: BetaToolInputSchema,
@@ -269,6 +296,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
                             audio: None,
                             content: Some(ChatCompletionAssistantContent::Text(text)),
                             reasoning_content: None,
+                            reasoning_details: None,
                             function_call: None,
                             name: None,
                             refusal: None,
@@ -278,12 +306,35 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
                 }
                 (BetaMessageRole::Assistant, BetaMessageContent::Blocks(blocks)) => {
                     let mut assistant_text_parts = Vec::new();
+                    let mut reasoning_parts = Vec::new();
+                    let mut reasoning_details = Vec::new();
+                    let mut reasoning_index = 0u64;
                     let mut tool_calls = Vec::new();
 
                     for block in blocks {
                         match block {
                             BetaContentBlockParam::Text(block) => {
                                 assistant_text_parts.push(block.text);
+                            }
+                            BetaContentBlockParam::Thinking(block) => {
+                                if !block.thinking.is_empty() {
+                                    reasoning_parts.push(block.thinking.clone());
+                                    reasoning_details.push(chat_reasoning_text_detail(
+                                        reasoning_index,
+                                        block.signature,
+                                        block.thinking,
+                                    ));
+                                    reasoning_index += 1;
+                                }
+                            }
+                            BetaContentBlockParam::RedactedThinking(block) => {
+                                if !block.data.is_empty() {
+                                    reasoning_details.push(chat_reasoning_encrypted_detail(
+                                        reasoning_index,
+                                        block.data,
+                                    ));
+                                    reasoning_index += 1;
+                                }
                             }
                             BetaContentBlockParam::ToolUse(block) => {
                                 tool_calls.push(ChatCompletionMessageToolCall::Function(
@@ -354,7 +405,16 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
                             role: ChatCompletionAssistantRole::Assistant,
                             audio: None,
                             content: content_text.map(ChatCompletionAssistantContent::Text),
-                            reasoning_content: None,
+                            reasoning_content: if reasoning_parts.is_empty() {
+                                None
+                            } else {
+                                Some(reasoning_parts.join("\n"))
+                            },
+                            reasoning_details: if reasoning_details.is_empty() {
+                                None
+                            } else {
+                                Some(reasoning_details)
+                            },
                             function_call: None,
                             name: None,
                             refusal: None,

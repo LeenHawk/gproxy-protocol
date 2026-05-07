@@ -28,6 +28,7 @@ fn assistant_message_with_text(text: String) -> ct::ChatCompletionAssistantMessa
             Some(ct::ChatCompletionAssistantContent::Text(text))
         },
         reasoning_content: None,
+        reasoning_details: None,
         function_call: None,
         name: None,
         refusal: None,
@@ -93,7 +94,92 @@ fn reasoning_item_to_text(reasoning: &ot::ResponseReasoningItem) -> String {
         return text;
     }
 
-    reasoning.encrypted_content.clone().unwrap_or_default()
+    String::new()
+}
+
+fn reasoning_detail(
+    type_: ct::ChatCompletionReasoningDetailType,
+    id: Option<String>,
+    data: Option<String>,
+    text: Option<String>,
+    signature: Option<String>,
+    index: Option<u64>,
+) -> ct::ChatCompletionReasoningDetail {
+    ct::ChatCompletionReasoningDetail {
+        type_,
+        id,
+        data,
+        text,
+        signature,
+        index,
+    }
+}
+
+fn reasoning_item_to_chat_details(
+    reasoning: &ot::ResponseReasoningItem,
+) -> Vec<ct::ChatCompletionReasoningDetail> {
+    let mut details = Vec::new();
+    let id = reasoning.id.clone();
+    let signature = reasoning.signature.clone();
+    let mut index = 0_u64;
+
+    if let Some(encrypted_content) = reasoning
+        .encrypted_content
+        .as_ref()
+        .filter(|text| !text.is_empty())
+    {
+        details.push(reasoning_detail(
+            ct::ChatCompletionReasoningDetailType::ReasoningEncrypted,
+            id.clone(),
+            Some(encrypted_content.clone()),
+            None,
+            signature.clone(),
+            Some(index),
+        ));
+        index += 1;
+    }
+
+    if let Some(content) = reasoning.content.as_ref() {
+        for part in content.iter().filter(|part| !part.text.is_empty()) {
+            details.push(reasoning_detail(
+                ct::ChatCompletionReasoningDetailType::ReasoningText,
+                id.clone(),
+                None,
+                Some(part.text.clone()),
+                signature.clone(),
+                Some(index),
+            ));
+            index += 1;
+        }
+    }
+
+    for part in reasoning
+        .summary
+        .iter()
+        .filter(|part| !part.text.is_empty())
+    {
+        details.push(reasoning_detail(
+            ct::ChatCompletionReasoningDetailType::ReasoningSummary,
+            id.clone(),
+            None,
+            Some(part.text.clone()),
+            signature.clone(),
+            Some(index),
+        ));
+        index += 1;
+    }
+
+    details
+}
+
+fn append_reasoning_details(
+    target: &mut Option<Vec<ct::ChatCompletionReasoningDetail>>,
+    mut details: Vec<ct::ChatCompletionReasoningDetail>,
+) {
+    if details.is_empty() {
+        return;
+    }
+    target.get_or_insert_with(Vec::new).append(&mut details);
 }
 
 fn flush_pending_assistant(
@@ -255,6 +341,10 @@ impl TryFrom<OpenAiCreateResponseRequest> for OpenAiChatCompletionsRequest {
                         .get_or_insert_with(|| assistant_message_with_text(String::new()));
                     let reasoning_text = reasoning_item_to_text(&reasoning);
                     append_joined_text(&mut assistant.reasoning_content, reasoning_text);
+                    append_reasoning_details(
+                        &mut assistant.reasoning_details,
+                        reasoning_item_to_chat_details(&reasoning),
+                    );
                 }
                 _ => {}
             }
@@ -318,5 +408,75 @@ impl TryFrom<OpenAiCreateResponseRequest> for OpenAiChatCompletionsRequest {
                 web_search_options: None,
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::openai::create_response::request as rreq;
+
+    #[test]
+    fn response_reasoning_items_preserve_chat_reasoning_details() {
+        let request = OpenAiCreateResponseRequest {
+            body: rreq::RequestBody {
+                model: Some("gpt-5".to_string()),
+                input: Some(ot::ResponseInput::Items(vec![
+                    ot::ResponseInputItem::ReasoningItem(ot::ResponseReasoningItem {
+                        id: Some("rs_1".to_string()),
+                        summary: vec![ot::ResponseSummaryTextContent {
+                            text: "summary text".to_string(),
+                            type_: ot::ResponseSummaryTextContentType::SummaryText,
+                        }],
+                        type_: ot::ResponseReasoningItemType::Reasoning,
+                        content: Some(vec![ot::ResponseReasoningTextContent {
+                            text: "visible text".to_string(),
+                            type_: ot::ResponseReasoningTextContentType::ReasoningText,
+                        }]),
+                        encrypted_content: Some("ciphertext".to_string()),
+                        status: Some(ot::ResponseItemStatus::Completed),
+                        signature: Some("sig_rs".to_string()),
+                    }),
+                ])),
+                ..rreq::RequestBody::default()
+            },
+            ..OpenAiCreateResponseRequest::default()
+        };
+
+        let converted = OpenAiChatCompletionsRequest::try_from(request).unwrap();
+        let assistant = converted
+            .body
+            .messages
+            .into_iter()
+            .find_map(|message| match message {
+                ct::ChatCompletionMessageParam::Assistant(message) => Some(message),
+                _ => None,
+            })
+            .expect("assistant message");
+
+        assert_eq!(assistant.reasoning_content.as_deref(), Some("visible text"));
+        let details = assistant.reasoning_details.expect("reasoning details");
+        assert!(details.iter().any(|detail| {
+            matches!(
+                detail.type_,
+                ct::ChatCompletionReasoningDetailType::ReasoningEncrypted
+            ) && detail.id.as_deref() == Some("rs_1")
+                && detail.data.as_deref() == Some("ciphertext")
+                && detail.signature.as_deref() == Some("sig_rs")
+        }));
+        assert!(details.iter().any(|detail| {
+            matches!(
+                detail.type_,
+                ct::ChatCompletionReasoningDetailType::ReasoningText
+            ) && detail.text.as_deref() == Some("visible text")
+                && detail.signature.as_deref() == Some("sig_rs")
+        }));
+        assert!(details.iter().any(|detail| {
+            matches!(
+                detail.type_,
+                ct::ChatCompletionReasoningDetailType::ReasoningSummary
+            ) && detail.text.as_deref() == Some("summary text")
+                && detail.signature.as_deref() == Some("sig_rs")
+        }));
     }
 }

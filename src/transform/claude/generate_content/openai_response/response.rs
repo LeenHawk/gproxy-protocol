@@ -1,7 +1,7 @@
 use crate::claude::count_tokens::types::{
     BetaCompactionBlockType, BetaMcpToolResultBlockParamContent, BetaMcpToolUseBlockType,
-    BetaRequestMcpToolResultBlockType, BetaServerToolUseBlockType, BetaServerToolUseName,
-    BetaThinkingBlockType, BetaToolUseBlockType,
+    BetaRedactedThinkingBlockType, BetaRequestMcpToolResultBlockType, BetaServerToolUseBlockType,
+    BetaServerToolUseName, BetaThinkingBlockType, BetaToolUseBlockType,
 };
 use crate::claude::create_message::response::ClaudeCreateMessageResponse;
 use crate::claude::create_message::types::{
@@ -310,17 +310,25 @@ impl TryFrom<OpenAiCreateResponseResponse> for ClaudeCreateMessageResponse {
                             }));
                         }
                         ResponseOutputItem::ReasoningItem(reasoning) => {
-                            let signature = reasoning.id.filter(|id| !id.is_empty());
+                            let signature = reasoning
+                                .signature
+                                .filter(|signature| !signature.is_empty())
+                                .or_else(|| reasoning.id.filter(|id| !id.is_empty()));
                             let mut thinking = reasoning
-                                .summary
+                                .content
+                                .unwrap_or_default()
                                 .into_iter()
                                 .map(|item| item.text)
+                                .filter(|text| !text.is_empty())
                                 .collect::<Vec<_>>();
-                            if thinking.is_empty()
-                                && let Some(reasoning_content) = reasoning.content
-                            {
-                                thinking
-                                    .extend(reasoning_content.into_iter().map(|item| item.text));
+                            if thinking.is_empty() {
+                                thinking.extend(
+                                    reasoning
+                                        .summary
+                                        .into_iter()
+                                        .map(|item| item.text)
+                                        .filter(|text| !text.is_empty()),
+                                );
                             }
                             let thinking = thinking.join("\n");
                             if !thinking.is_empty()
@@ -331,6 +339,16 @@ impl TryFrom<OpenAiCreateResponseResponse> for ClaudeCreateMessageResponse {
                                         signature,
                                         thinking,
                                         type_: BetaThinkingBlockType::Thinking,
+                                    },
+                                ));
+                            }
+                            if let Some(data) =
+                                reasoning.encrypted_content.filter(|data| !data.is_empty())
+                            {
+                                content.push(BetaContentBlock::RedactedThinking(
+                                    crate::claude::create_message::types::BetaRedactedThinkingBlock {
+                                        data,
+                                        type_: BetaRedactedThinkingBlockType::RedactedThinking,
                                     },
                                 ));
                             }

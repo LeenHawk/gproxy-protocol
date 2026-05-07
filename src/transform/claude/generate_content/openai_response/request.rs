@@ -774,6 +774,8 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
             effort: Some(effort),
             generate_summary: None,
             summary: None,
+            enabled: None,
+            max_tokens: None,
         });
         let output_schema = body
             .output_config
@@ -1419,17 +1421,24 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                 }
                             }
                             ct::BetaContentBlockParam::Thinking(block) => {
+                                let signature = block.signature;
+                                let thinking = block.thinking;
                                 input_items.push(ResponseInputItem::ReasoningItem(
                                     ot::ResponseReasoningItem {
-                                        id: Some(block.signature),
+                                        id: Some(signature.clone()),
                                         summary: vec![ot::ResponseSummaryTextContent {
-                                            text: block.thinking,
+                                            text: thinking.clone(),
                                             type_: ot::ResponseSummaryTextContentType::SummaryText,
                                         }],
                                         type_: ot::ResponseReasoningItemType::Reasoning,
-                                        content: None,
+                                        content: Some(vec![ot::ResponseReasoningTextContent {
+                                            text: thinking,
+                                            type_:
+                                                ot::ResponseReasoningTextContentType::ReasoningText,
+                                        }]),
                                         encrypted_content: None,
                                         status: Some(ot::ResponseItemStatus::Completed),
+                                        signature: Some(signature),
                                     },
                                 ));
                             }
@@ -1442,6 +1451,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                         content: None,
                                         encrypted_content: Some(block.data),
                                         status: Some(ot::ResponseItemStatus::Completed),
+                                        signature: None,
                                     },
                                 ));
                                 reasoning_index += 1;
@@ -1988,5 +1998,85 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                 ..RequestBody::default()
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claude_thinking_history_preserves_response_reasoning_signature_and_content() {
+        let request = ClaudeCreateMessageRequest {
+            method: crate::claude::create_message::types::HttpMethod::Post,
+            path: crate::claude::create_message::request::PathParameters::default(),
+            query: crate::claude::create_message::request::QueryParameters::default(),
+            headers: crate::claude::create_message::request::RequestHeaders::default(),
+            body: crate::claude::create_message::request::RequestBody {
+                max_tokens: 1024,
+                messages: vec![ct::BetaMessageParam {
+                    role: ct::BetaMessageRole::Assistant,
+                    content: ct::BetaMessageContent::Blocks(vec![
+                        ct::BetaContentBlockParam::Thinking(ct::BetaThinkingBlockParam {
+                            signature: "sig_claude".to_string(),
+                            thinking: "visible thinking".to_string(),
+                            type_: ct::BetaThinkingBlockType::Thinking,
+                        }),
+                        ct::BetaContentBlockParam::RedactedThinking(
+                            ct::BetaRedactedThinkingBlockParam {
+                                data: "ciphertext".to_string(),
+                                type_: ct::BetaRedactedThinkingBlockType::RedactedThinking,
+                            },
+                        ),
+                    ]),
+                }],
+                model: ct::Model::Custom("claude-test".to_string()),
+                container: None,
+                context_management: None,
+                inference_geo: None,
+                mcp_servers: None,
+                metadata: None,
+                cache_control: None,
+                output_config: None,
+                service_tier: None,
+                speed: None,
+                stop_sequences: None,
+                stream: None,
+                system: None,
+                temperature: None,
+                thinking: None,
+                tool_choice: None,
+                tools: None,
+                top_k: None,
+                top_p: None,
+            },
+        };
+
+        let converted = OpenAiCreateResponseRequest::try_from(request).expect("request converts");
+        let Some(ResponseInput::Items(items)) = converted.body.input else {
+            panic!("expected response input items");
+        };
+
+        let reasoning = items
+            .iter()
+            .filter_map(|item| match item {
+                ResponseInputItem::ReasoningItem(item) => Some(item),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(reasoning.len(), 2);
+        assert_eq!(reasoning[0].signature.as_deref(), Some("sig_claude"));
+        assert_eq!(
+            reasoning[0]
+                .content
+                .as_ref()
+                .and_then(|content| content.first())
+                .map(|part| part.text.as_str()),
+            Some("visible thinking")
+        );
+        assert_eq!(
+            reasoning[1].encrypted_content.as_deref(),
+            Some("ciphertext")
+        );
     }
 }

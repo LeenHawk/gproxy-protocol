@@ -6,12 +6,12 @@ use crate::openai::count_tokens::request::OpenAiCountTokensRequest;
 use crate::openai::count_tokens::types as ot;
 use crate::transform::openai::count_tokens::claude::utils::{
     ClaudeToolUseIdMapper, mcp_allowed_tools_to_configs, openai_mcp_tool_to_server,
-    openai_message_content_to_claude, openai_reasoning_to_claude, openai_role_to_claude,
-    openai_tool_choice_to_claude, parallel_disable, push_message_block, tool_from_function,
+    openai_message_content_to_claude, openai_reasoning_item_to_claude_blocks,
+    openai_reasoning_to_claude, openai_role_to_claude, openai_tool_choice_to_claude,
+    parallel_disable, push_message_block, tool_from_function,
 };
 use crate::transform::openai::count_tokens::utils::{
     openai_function_call_output_content_to_text, openai_input_to_items,
-    openai_reasoning_summary_to_text,
 };
 use crate::transform::utils::TransformError;
 
@@ -87,20 +87,8 @@ impl TryFrom<OpenAiCountTokensRequest> for ClaudeCountTokensRequest {
                     );
                 }
                 ot::ResponseInputItem::ReasoningItem(reasoning) => {
-                    let thinking = openai_reasoning_summary_to_text(&reasoning.summary);
-                    if !thinking.is_empty()
-                        && let Some(signature) = reasoning.id.filter(|id| !id.is_empty())
-                    {
-                        messages.push(ct::BetaMessageParam {
-                            content: ct::BetaMessageContent::Blocks(vec![
-                                ct::BetaContentBlockParam::Thinking(ct::BetaThinkingBlockParam {
-                                    signature,
-                                    thinking,
-                                    type_: ct::BetaThinkingBlockType::Thinking,
-                                }),
-                            ]),
-                            role: ct::BetaMessageRole::Assistant,
-                        });
+                    for block in openai_reasoning_item_to_claude_blocks(reasoning) {
+                        push_message_block(&mut messages, ct::BetaMessageRole::Assistant, block);
                     }
                 }
                 other => {

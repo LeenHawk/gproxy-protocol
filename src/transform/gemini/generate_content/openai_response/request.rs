@@ -91,6 +91,7 @@ impl TryFrom<GeminiGenerateContentRequest> for OpenAiCreateResponseRequest {
                             content: None,
                             encrypted_content: None,
                             status: None,
+                            signature: None,
                         }));
                     } else {
                         message_parts.push(ResponseInputContent::Text(ResponseInputText {
@@ -400,6 +401,8 @@ impl TryFrom<GeminiGenerateContentRequest> for OpenAiCreateResponseRequest {
                 effort: Some(effort),
                 generate_summary: None,
                 summary: None,
+                enabled: None,
+                max_tokens: None,
             });
 
         let text = body.generation_config.as_ref().and_then(|config| {

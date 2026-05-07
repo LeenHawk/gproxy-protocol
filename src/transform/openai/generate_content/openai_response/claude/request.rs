@@ -10,13 +10,12 @@ use crate::openai::create_response::request::OpenAiCreateResponseRequest;
 use crate::openai::create_response::types::{ResponseContextManagementType, ResponseServiceTier};
 use crate::transform::openai::count_tokens::claude::utils::{
     ClaudeToolUseIdMapper, mcp_allowed_tools_to_configs, openai_mcp_tool_to_server,
-    openai_message_content_to_claude, openai_reasoning_to_claude, openai_role_to_claude,
-    openai_tool_choice_to_claude, parallel_disable, push_message_block,
-    response_input_contents_to_tool_result_content, tool_from_function,
+    openai_message_content_to_claude, openai_reasoning_item_to_claude_blocks,
+    openai_reasoning_to_claude, openai_role_to_claude, openai_tool_choice_to_claude,
+    parallel_disable, push_message_block, response_input_contents_to_tool_result_content,
+    tool_from_function,
 };
-use crate::transform::openai::count_tokens::utils::{
-    openai_input_to_items, openai_reasoning_summary_to_text,
-};
+use crate::transform::openai::count_tokens::utils::openai_input_to_items;
 use crate::transform::utils::{TransformError, enforce_anthropic_strict_schema};
 
 fn parse_tool_use_input(input: String) -> ct::JsonObject {
@@ -605,25 +604,8 @@ impl TryFrom<OpenAiCreateResponseRequest> for ClaudeCreateMessageRequest {
                     }
                 }
                 ot::ResponseInputItem::ReasoningItem(reasoning) => {
-                    let mut thinking = openai_reasoning_summary_to_text(&reasoning.summary);
-                    if thinking.is_empty()
-                        && let Some(encrypted) = reasoning.encrypted_content
-                    {
-                        thinking = encrypted;
-                    }
-
-                    if !thinking.is_empty()
-                        && let Some(signature) = reasoning.id.filter(|id| !id.is_empty())
-                    {
-                        push_block_message(
-                            &mut messages,
-                            ct::BetaMessageRole::Assistant,
-                            ct::BetaContentBlockParam::Thinking(ct::BetaThinkingBlockParam {
-                                signature,
-                                thinking,
-                                type_: ct::BetaThinkingBlockType::Thinking,
-                            }),
-                        );
+                    for block in openai_reasoning_item_to_claude_blocks(reasoning) {
+                        push_block_message(&mut messages, ct::BetaMessageRole::Assistant, block);
                     }
                 }
                 other => {
@@ -973,5 +955,45 @@ mod tests {
             converted.body.messages[1].content,
             ct::BetaMessageContent::Text("hello there".to_string())
         );
+    }
+
+    #[test]
+    fn response_reasoning_history_maps_to_claude_thinking_and_redacted_blocks() {
+        let body = serde_json::from_value(serde_json::json!({
+            "model": "claude-jupiter-v1-p",
+            "input": [
+                {
+                    "type": "reasoning",
+                    "id": "reasoning_1",
+                    "signature": "sig_native",
+                    "summary": [{ "type": "summary_text", "text": "summary" }],
+                    "content": [{ "type": "reasoning_text", "text": "visible thinking" }],
+                    "encrypted_content": "ciphertext",
+                    "status": "completed"
+                }
+            ],
+            "max_output_tokens": 1024
+        }))
+        .expect("Responses reasoning history should deserialize");
+        let request = OpenAiCreateResponseRequest {
+            body,
+            ..Default::default()
+        };
+
+        let converted = ClaudeCreateMessageRequest::try_from(request).expect("request converts");
+        let ct::BetaMessageContent::Blocks(blocks) = &converted.body.messages[0].content else {
+            panic!("expected Claude assistant blocks");
+        };
+
+        assert!(matches!(
+            &blocks[0],
+            ct::BetaContentBlockParam::Thinking(block)
+                if block.signature == "sig_native" && block.thinking == "visible thinking"
+        ));
+        assert!(matches!(
+            &blocks[1],
+            ct::BetaContentBlockParam::RedactedThinking(block)
+                if block.data == "ciphertext"
+        ));
     }
 }

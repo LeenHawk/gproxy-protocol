@@ -214,9 +214,43 @@ impl ClaudeToOpenAiChatCompletionsStream {
             choice_index,
             ChatCompletionChunkDelta {
                 reasoning_details: Some(vec![ct::ChatCompletionReasoningDetail {
-                    type_: ct::ChatCompletionReasoningDetailType::ReasoningEncrypted,
+                    type_: ct::ChatCompletionReasoningDetailType::ReasoningText,
                     id: Some(reasoning_id),
-                    data: Some(signature),
+                    data: None,
+                    text: None,
+                    signature: Some(signature),
+                    index: Some(output_index),
+                }]),
+                ..Default::default()
+            },
+            None,
+            None,
+        ));
+    }
+
+    fn emit_reasoning_encrypted(
+        &mut self,
+        output_index: u64,
+        data: String,
+        out: &mut Vec<ChatCompletionChunk>,
+    ) {
+        if data.is_empty() {
+            return;
+        }
+
+        let choice_index = self.ensure_choice_index(output_index);
+        self.maybe_emit_role(out, choice_index);
+
+        out.push(self.make_chunk(
+            choice_index,
+            ChatCompletionChunkDelta {
+                reasoning_details: Some(vec![ct::ChatCompletionReasoningDetail {
+                    type_: ct::ChatCompletionReasoningDetailType::ReasoningEncrypted,
+                    id: Some(format!("redacted_reasoning_{output_index}")),
+                    data: Some(data),
+                    text: None,
+                    signature: None,
+                    index: Some(output_index),
                 }]),
                 ..Default::default()
             },
@@ -372,8 +406,12 @@ impl ClaudeToOpenAiChatCompletionsStream {
                         self.text_blocks.insert(output_index);
                         self.emit_content(output_index, block.text, false, out);
                     }
-                    BetaContentBlock::Thinking(_) | BetaContentBlock::RedactedThinking(_) => {
+                    BetaContentBlock::Thinking(_) => {
                         self.thinking_blocks.insert(output_index);
+                    }
+                    BetaContentBlock::RedactedThinking(block) => {
+                        self.thinking_blocks.insert(output_index);
+                        self.emit_reasoning_encrypted(output_index, block.data, out);
                     }
                     BetaContentBlock::ToolUse(block) => {
                         let arguments = serde_json::to_string(&block.input)

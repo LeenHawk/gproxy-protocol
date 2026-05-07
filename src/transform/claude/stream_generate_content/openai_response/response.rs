@@ -1,7 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::claude::count_tokens::types::BetaRedactedThinkingBlockType;
 use crate::claude::create_message::stream::ClaudeStreamEvent;
-use crate::claude::create_message::types::{BetaServiceTier, BetaStopReason};
+use crate::claude::create_message::types::{
+    BetaContentBlock, BetaRedactedThinkingBlock, BetaServiceTier, BetaStopReason,
+};
 use crate::openai::create_response::response::ResponseBody as OpenAiCreateResponseBody;
 use crate::openai::create_response::stream::{ResponseStreamContentPart, ResponseStreamEvent};
 use crate::openai::create_response::types::{
@@ -163,6 +166,23 @@ impl OpenAiResponseToClaudeStream {
     ) {
         self.ensure_running(out);
         let _ = push_thinking_block(out, &mut self.next_block_index, signature, thinking);
+    }
+
+    fn emit_redacted_thinking_block(&mut self, out: &mut Vec<ClaudeStreamEvent>, data: String) {
+        if data.is_empty() {
+            return;
+        }
+
+        self.ensure_running(out);
+        let index = self.next_block();
+        out.push(ClaudeStreamEvent::ContentBlockStart {
+            content_block: BetaContentBlock::RedactedThinking(BetaRedactedThinkingBlock {
+                data,
+                type_: BetaRedactedThinkingBlockType::RedactedThinking,
+            }),
+            index,
+        });
+        out.push(stop_block_event(index));
     }
 
     fn ensure_tool_block(
@@ -535,20 +555,24 @@ impl OpenAiResponseToClaudeStream {
                 }
             }
             ResponseOutputItem::ReasoningItem(item) => {
-                if let Some(signature) = item.id.filter(|id| !id.is_empty()) {
-                    for summary in item.summary {
-                        self.emit_thinking_block(out, signature.clone(), summary.text);
-                    }
+                let signature = item
+                    .signature
+                    .filter(|signature| !signature.is_empty())
+                    .or_else(|| item.id.filter(|id| !id.is_empty()));
+                if let Some(signature) = signature {
                     if let Some(content) = item.content {
                         for entry in content {
                             self.emit_thinking_block(out, signature.clone(), entry.text);
                         }
                     }
-                    if let Some(encrypted_content) = item.encrypted_content
-                        && !encrypted_content.is_empty()
-                    {
-                        self.emit_thinking_block(out, signature, encrypted_content);
+                    for summary in item.summary {
+                        self.emit_thinking_block(out, signature.clone(), summary.text);
                     }
+                }
+                if let Some(encrypted_content) =
+                    item.encrypted_content.filter(|content| !content.is_empty())
+                {
+                    self.emit_redacted_thinking_block(out, encrypted_content);
                 }
             }
             ResponseOutputItem::CompactionItem(item) => {
@@ -1177,6 +1201,8 @@ mod tests {
                 effort: Some(ot::ResponseReasoningEffort::Medium),
                 generate_summary: None,
                 summary: None,
+                enabled: None,
+                max_tokens: None,
             }),
             safety_identifier: None,
             service_tier: Some(ResponseServiceTier::Auto),

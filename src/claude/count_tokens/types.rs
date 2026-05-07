@@ -1407,6 +1407,8 @@ pub enum BetaOutputEffort {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BetaTaskBudget {
     pub total: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remaining: Option<u64>,
     #[serde(rename = "type")]
     pub type_: BetaTaskBudgetType,
 }
@@ -1517,6 +1519,7 @@ mod tests {
             format: None,
             task_budget: Some(BetaTaskBudget {
                 total: 128_000,
+                remaining: None,
                 type_: BetaTaskBudgetType::Tokens,
             }),
         };
@@ -1525,6 +1528,22 @@ mod tests {
         assert_eq!(value["effort"], "xhigh");
         assert_eq!(value["task_budget"]["type"], "tokens");
         assert_eq!(value["task_budget"]["total"], 128_000);
+    }
+
+    #[test]
+    fn output_config_task_budget_models_remaining_tokens() {
+        let output_config: BetaOutputConfig = serde_json::from_value(serde_json::json!({
+            "task_budget": {
+                "type": "tokens",
+                "total": 128000,
+                "remaining": 64000
+            }
+        }))
+        .expect("task budget remaining should deserialize");
+
+        let task_budget = output_config.task_budget.expect("task budget");
+        assert_eq!(task_budget.total, 128_000);
+        assert_eq!(task_budget.remaining, Some(64_000));
     }
 }
 

@@ -969,6 +969,7 @@ fn reasoning_item(
         content,
         encrypted_content: None,
         status: Some(status),
+        signature: None,
     })
 }
 

@@ -365,6 +365,33 @@ mod tests {
         assert!(value.get("status").is_none(), "status should stay absent");
         assert!(value.get("type").is_none(), "type should stay absent");
     }
+
+    #[test]
+    fn responses_models_reasoning_controls_and_metadata() {
+        let reasoning: ResponseReasoning = serde_json::from_value(serde_json::json!({
+            "effort": "high",
+            "summary": "detailed",
+            "enabled": true,
+            "max_tokens": 4096
+        }))
+        .expect("reasoning controls should deserialize");
+
+        assert_eq!(reasoning.enabled, Some(true));
+        assert_eq!(reasoning.max_tokens, Some(4096));
+
+        let item: ResponseReasoningItem = serde_json::from_value(serde_json::json!({
+            "id": "rs_1",
+            "type": "reasoning",
+            "status": "completed",
+            "content": [{ "type": "reasoning_text", "text": "visible reasoning" }],
+            "encrypted_content": "ciphertext",
+            "summary": [{ "type": "summary_text", "text": "summary" }],
+            "signature": "sig_1"
+        }))
+        .expect("reasoning item metadata should deserialize");
+
+        assert_eq!(item.signature.as_deref(), Some("sig_1"));
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -700,6 +727,8 @@ pub struct ResponseReasoningItem {
     pub encrypted_content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<ResponseItemStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1200,6 +1229,10 @@ pub struct ResponseReasoning {
     pub generate_summary: Option<ResponseReasoningSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<ResponseReasoningSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

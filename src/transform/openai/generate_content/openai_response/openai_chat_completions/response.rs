@@ -12,61 +12,106 @@ fn reasoning_item_from_chat_message(
     fallback_id: String,
     reasoning_content: Option<String>,
     reasoning_details: Option<Vec<ct::ChatCompletionReasoningDetail>>,
-) -> Option<rt::ResponseOutputItem> {
-    let mut encrypted_content = None;
-    let mut reasoning_id = Some(fallback_id);
+) -> Vec<rt::ResponseOutputItem> {
+    let mut items = Vec::new();
+    let reasoning_content_signature = reasoning_details
+        .as_ref()
+        .and_then(|details| details.iter().find_map(chat_reasoning_detail_signature));
 
-    if let Some(details) = reasoning_details {
-        for detail in details {
-            if matches!(
-                detail.type_,
-                ct::ChatCompletionReasoningDetailType::ReasoningEncrypted
-            ) {
-                if detail.id.is_some() {
-                    reasoning_id = detail.id;
-                }
-                if detail.data.is_some() {
-                    encrypted_content = detail.data;
-                }
-                break;
-            }
-        }
+    if let Some(reasoning_content) = reasoning_content.filter(|text| !text.is_empty()) {
+        items.push(reasoning_output_item(
+            Some(fallback_id.clone()),
+            vec![summary_text_part(reasoning_content.clone())],
+            Some(vec![reasoning_text_part(reasoning_content)]),
+            None,
+            reasoning_content_signature,
+        ));
     }
 
-    let text = reasoning_content.unwrap_or_default();
-    if text.is_empty() && encrypted_content.is_none() {
-        return None;
+    if let Some(reasoning_details) = reasoning_details {
+        let base_ordinal = items.len();
+        items.extend(reasoning_details.into_iter().enumerate().filter_map(
+            |(detail_index, detail)| {
+                chat_reasoning_detail_to_response_output_item(
+                    fallback_id.as_str(),
+                    base_ordinal + detail_index,
+                    detail,
+                )
+            },
+        ));
     }
 
-    let summary = if text.is_empty() {
-        Vec::new()
-    } else {
-        vec![ot::ResponseSummaryTextContent {
-            text: text.clone(),
-            type_: ot::ResponseSummaryTextContentType::SummaryText,
-        }]
-    };
-    let content = if text.is_empty() {
-        None
-    } else {
-        Some(vec![ot::ResponseReasoningTextContent {
-            text,
-            type_: ot::ResponseReasoningTextContentType::ReasoningText,
-        }])
-    };
-
-    Some(rt::ResponseOutputItem::ReasoningItem(
-        ot::ResponseReasoningItem {
-            id: reasoning_id,
-            summary,
-            type_: ot::ResponseReasoningItemType::Reasoning,
-            content,
-            encrypted_content,
-            status: Some(ot::ResponseItemStatus::Completed),
-        },
-    ))
+    items
 }
 
+fn chat_reasoning_detail_signature(detail: &ct::ChatCompletionReasoningDetail) -> Option<String> {
+    detail
+        .signature
+        .clone()
+        .filter(|signature| !signature.is_empty())
+        .or_else(|| detail.id.clone().filter(|id| !id.is_empty()))
+}
+
+fn reasoning_text_part(text: String) -> ot::ResponseReasoningTextContent {
+    ot::ResponseReasoningTextContent {
+        text,
+        type_: ot::ResponseReasoningTextContentType::ReasoningText,
+    }
+}
+
+fn summary_text_part(text: String) -> ot::ResponseSummaryTextContent {
+    ot::ResponseSummaryTextContent {
+        text,
+        type_: ot::ResponseSummaryTextContentType::SummaryText,
+    }
+}
+
+fn reasoning_output_item(
+    id: Option<String>,
+    summary: Vec<ot::ResponseSummaryTextContent>,
+    content: Option<Vec<ot::ResponseReasoningTextContent>>,
+    encrypted_content: Option<String>,
+    signature: Option<String>,
+) -> rt::ResponseOutputItem {
+    rt::ResponseOutputItem::ReasoningItem(ot::ResponseReasoningItem {
+        id,
+        summary,
+        type_: ot::ResponseReasoningItemType::Reasoning,
+        content,
+        encrypted_content,
+        status: Some(ot::ResponseItemStatus::Completed),
+        signature,
+    })
+}
+
+fn chat_reasoning_detail_to_response_output_item(
+    fallback_id: &str,
+    ordinal: usize,
+    detail: ct::ChatCompletionReasoningDetail,
+) -> Option<rt::ResponseOutputItem> {
+    let id = detail
+        .id
+        .or_else(|| Some(format!("{fallback_id}_{ordinal}")));
+    let signature = detail.signature;
+
+    match detail.type_ {
+        ct::ChatCompletionReasoningDetailType::ReasoningEncrypted => detail
+            .data
+            .map(|data| reasoning_output_item(id, Vec::new(), None, Some(data), signature)),
+        ct::ChatCompletionReasoningDetailType::ReasoningSummary => detail.text.map(|text| {
+            reasoning_output_item(id, vec![summary_text_part(text)], None, None, signature)
+        }),
+        ct::ChatCompletionReasoningDetailType::ReasoningText => detail.text.map(|text| {
+            reasoning_output_item(
+                id,
+                Vec::new(),
+                Some(vec![reasoning_text_part(text)]),
+                None,
+                signature,
+            )
+        }),
+    }
+}
 impl TryFrom<OpenAiChatCompletionsResponse> for OpenAiCreateResponseResponse {
     type Error = TransformError;
 
@@ -104,13 +149,11 @@ impl TryFrom<OpenAiChatCompletionsResponse> for OpenAiCreateResponseResponse {
                         | ct::ChatCompletionFinishReason::FunctionCall => {}
                     }
 
-                    if let Some(reasoning_item) = reasoning_item_from_chat_message(
+                    output.extend(reasoning_item_from_chat_message(
                         format!("{}_reasoning_0", body.id),
                         choice.message.reasoning_content.clone(),
                         choice.message.reasoning_details.clone(),
-                    ) {
-                        output.push(reasoning_item);
-                    }
+                    ));
 
                     let mut message_content = Vec::new();
                     if let Some(content) = choice.message.content
@@ -289,5 +332,89 @@ impl TryFrom<OpenAiChatCompletionsResponse> for OpenAiCreateResponseResponse {
                 body,
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chat_response_reasoning_details_preserve_response_reasoning_items() {
+        let response = OpenAiChatCompletionsResponse::Success {
+            stats_code: http::StatusCode::OK,
+            headers: OpenAiResponseHeaders::default(),
+            body: ct::ChatCompletion {
+                id: "chatcmpl_1".to_string(),
+                choices: vec![ct::ChatCompletionChoice {
+                    finish_reason: ct::ChatCompletionFinishReason::Stop,
+                    index: 0,
+                    logprobs: None,
+                    message: ct::ChatCompletionMessage {
+                        content: Some("done".to_string()),
+                        reasoning_content: None,
+                        reasoning_details: Some(vec![
+                            ct::ChatCompletionReasoningDetail {
+                                type_: ct::ChatCompletionReasoningDetailType::ReasoningEncrypted,
+                                id: Some("enc_1".to_string()),
+                                data: Some("ciphertext".to_string()),
+                                text: None,
+                                signature: Some("sig_enc".to_string()),
+                                index: Some(0),
+                            },
+                            ct::ChatCompletionReasoningDetail {
+                                type_: ct::ChatCompletionReasoningDetailType::ReasoningText,
+                                id: Some("txt_1".to_string()),
+                                data: None,
+                                text: Some("detail text".to_string()),
+                                signature: Some("sig_text".to_string()),
+                                index: Some(1),
+                            },
+                        ]),
+                        refusal: None,
+                        role: ct::ChatCompletionAssistantRole::Assistant,
+                        annotations: None,
+                        audio: None,
+                        function_call: None,
+                        tool_calls: None,
+                    },
+                }],
+                created: 1,
+                model: "gpt-5".to_string(),
+                object: ct::ChatCompletionObject::ChatCompletion,
+                service_tier: None,
+                system_fingerprint: None,
+                usage: None,
+            },
+        };
+
+        let converted = OpenAiCreateResponseResponse::try_from(response).unwrap();
+        let body = match converted {
+            OpenAiCreateResponseResponse::Success { body, .. } => body,
+            _ => panic!("expected success response"),
+        };
+        let reasoning = body
+            .output
+            .into_iter()
+            .filter_map(|item| match item {
+                rt::ResponseOutputItem::ReasoningItem(item) => Some(item),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(reasoning.len(), 2);
+        assert!(reasoning.iter().any(|item| {
+            item.id.as_deref() == Some("enc_1")
+                && item.encrypted_content.as_deref() == Some("ciphertext")
+                && item.signature.as_deref() == Some("sig_enc")
+        }));
+        assert!(reasoning.iter().any(|item| {
+            item.id.as_deref() == Some("txt_1")
+                && item
+                    .content
+                    .as_ref()
+                    .is_some_and(|parts| parts.iter().any(|part| part.text == "detail text"))
+                && item.signature.as_deref() == Some("sig_text")
+        }));
     }
 }

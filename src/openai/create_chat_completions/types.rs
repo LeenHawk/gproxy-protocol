@@ -86,6 +86,8 @@ pub struct ChatCompletionAssistantMessageParam {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<Vec<ChatCompletionReasoningDetail>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_call: Option<ChatCompletionFunctionCall>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -699,6 +701,8 @@ pub enum ChatCompletionModality {
     Text,
     #[serde(rename = "audio")]
     Audio,
+    #[serde(rename = "image")]
+    Image,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -933,12 +937,22 @@ pub struct ChatCompletionReasoningDetail {
     pub id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChatCompletionReasoningDetailType {
     #[serde(rename = "reasoning.encrypted")]
     ReasoningEncrypted,
+    #[serde(rename = "reasoning.summary")]
+    ReasoningSummary,
+    #[serde(rename = "reasoning.text")]
+    ReasoningText,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1086,4 +1100,93 @@ pub enum ChatCompletionDeltaRole {
     Assistant,
     #[serde(rename = "tool")]
     Tool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::openai::create_chat_completions::request::RequestBody;
+
+    #[test]
+    fn chat_models_reasoning_and_image_modality_fields() {
+        let request: RequestBody = serde_json::from_value(serde_json::json!({
+            "model": "gpt-capability",
+            "modalities": ["text", "image"],
+            "messages": [{
+                "role": "user",
+                "content": "hello"
+            }]
+        }))
+        .expect("chat request capability fields should deserialize");
+
+        assert_eq!(
+            request.modalities,
+            Some(vec![
+                ChatCompletionModality::Text,
+                ChatCompletionModality::Image
+            ])
+        );
+
+        let response: ChatCompletion = serde_json::from_value(serde_json::json!({
+            "id": "chatcmpl-capability",
+            "object": "chat.completion",
+            "created": 1,
+            "model": "gpt-capability",
+            "choices": [{
+                "index": 0,
+                "finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": "done",
+                    "reasoning_content": "visible chain",
+                    "reasoning_details": [
+                        {
+                            "type": "reasoning.encrypted",
+                            "id": "enc-1",
+                            "data": "ciphertext",
+                            "signature": "sig-1",
+                            "index": 0
+                        },
+                        {
+                            "type": "reasoning.summary",
+                            "text": "summary",
+                            "index": 1
+                        },
+                        {
+                            "type": "reasoning.text",
+                            "text": "reasoning text",
+                            "signature": "sig-2",
+                            "index": 2
+                        }
+                    ]
+                }
+            }],
+            "usage": {
+                "completion_tokens": 7,
+                "prompt_tokens": 5,
+                "total_tokens": 12
+            }
+        }))
+        .expect("chat response capability fields should deserialize");
+
+        let details = response.choices[0]
+            .message
+            .reasoning_details
+            .as_ref()
+            .expect("reasoning details");
+        assert!(matches!(
+            details[0].type_,
+            ChatCompletionReasoningDetailType::ReasoningEncrypted
+        ));
+        assert!(matches!(
+            details[1].type_,
+            ChatCompletionReasoningDetailType::ReasoningSummary
+        ));
+        assert!(matches!(
+            details[2].type_,
+            ChatCompletionReasoningDetailType::ReasoningText
+        ));
+        assert_eq!(details[1].text.as_deref(), Some("summary"));
+        assert_eq!(details[2].signature.as_deref(), Some("sig-2"));
+    }
 }

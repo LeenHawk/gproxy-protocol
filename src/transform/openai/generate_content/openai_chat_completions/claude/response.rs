@@ -38,6 +38,9 @@ impl TryFrom<ClaudeCreateMessageResponse> for OpenAiChatCompletionsResponse {
 
                 let mut content_parts = Vec::new();
                 let mut refusal_parts = Vec::new();
+                let mut reasoning_parts = Vec::new();
+                let mut reasoning_details = Vec::new();
+                let mut reasoning_index = 0u64;
                 let mut annotations = Vec::new();
                 let mut function_tool_calls = Vec::new();
                 let mut custom_tool_calls = Vec::new();
@@ -226,8 +229,33 @@ impl TryFrom<ClaudeCreateMessageResponse> for OpenAiChatCompletionsResponse {
                                 content_parts.push(text);
                             }
                         }
-                        crate::claude::create_message::types::BetaContentBlock::Thinking(_)
-                        | crate::claude::create_message::types::BetaContentBlock::RedactedThinking(_) => {}
+                        crate::claude::create_message::types::BetaContentBlock::Thinking(block) => {
+                            if !block.thinking.is_empty() {
+                                reasoning_parts.push(block.thinking.clone());
+                                reasoning_details.push(oct::ChatCompletionReasoningDetail {
+                                    type_: oct::ChatCompletionReasoningDetailType::ReasoningText,
+                                    id: Some(block.signature.clone()),
+                                    data: None,
+                                    text: Some(block.thinking),
+                                    signature: Some(block.signature),
+                                    index: Some(reasoning_index),
+                                });
+                                reasoning_index += 1;
+                            }
+                        }
+                        crate::claude::create_message::types::BetaContentBlock::RedactedThinking(block) => {
+                            if !block.data.is_empty() {
+                                reasoning_details.push(oct::ChatCompletionReasoningDetail {
+                                    type_: oct::ChatCompletionReasoningDetailType::ReasoningEncrypted,
+                                    id: Some(format!("redacted_reasoning_{reasoning_index}")),
+                                    data: Some(block.data),
+                                    text: None,
+                                    signature: None,
+                                    index: Some(reasoning_index),
+                                });
+                                reasoning_index += 1;
+                            }
+                        }
                     }
                 }
 
@@ -284,8 +312,16 @@ impl TryFrom<ClaudeCreateMessageResponse> for OpenAiChatCompletionsResponse {
                                 } else {
                                     Some(content_parts.join("\n"))
                                 },
-                                reasoning_content: None,
-                                reasoning_details: None,
+                                reasoning_content: if reasoning_parts.is_empty() {
+                                    None
+                                } else {
+                                    Some(reasoning_parts.join("\n"))
+                                },
+                                reasoning_details: if reasoning_details.is_empty() {
+                                    None
+                                } else {
+                                    Some(reasoning_details)
+                                },
                                 refusal: if refusal_parts.is_empty() {
                                     None
                                 } else {
