@@ -316,25 +316,25 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
                             BetaContentBlockParam::Text(block) => {
                                 assistant_text_parts.push(block.text);
                             }
-                            BetaContentBlockParam::Thinking(block) => {
-                                if !block.thinking.is_empty() {
-                                    reasoning_parts.push(block.thinking.clone());
-                                    reasoning_details.push(chat_reasoning_text_detail(
-                                        reasoning_index,
-                                        block.signature,
-                                        block.thinking,
-                                    ));
-                                    reasoning_index += 1;
-                                }
+                            BetaContentBlockParam::Thinking(block)
+                                if !block.thinking.is_empty() =>
+                            {
+                                reasoning_parts.push(block.thinking.clone());
+                                reasoning_details.push(chat_reasoning_text_detail(
+                                    reasoning_index,
+                                    block.signature,
+                                    block.thinking,
+                                ));
+                                reasoning_index += 1;
                             }
-                            BetaContentBlockParam::RedactedThinking(block) => {
-                                if !block.data.is_empty() {
-                                    reasoning_details.push(chat_reasoning_encrypted_detail(
-                                        reasoning_index,
-                                        block.data,
-                                    ));
-                                    reasoning_index += 1;
-                                }
+                            BetaContentBlockParam::RedactedThinking(block)
+                                if !block.data.is_empty() =>
+                            {
+                                reasoning_details.push(chat_reasoning_encrypted_detail(
+                                    reasoning_index,
+                                    block.data,
+                                ));
+                                reasoning_index += 1;
                             }
                             BetaContentBlockParam::ToolUse(block) => {
                                 tool_calls.push(ChatCompletionMessageToolCall::Function(
