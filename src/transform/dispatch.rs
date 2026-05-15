@@ -1131,10 +1131,10 @@ pub fn transform_request(
             ProtocolKind::OpenAi,
             OperationFamily::StreamGenerateContent,
             ProtocolKind::Gemini,
-        ) => transform_json::<
+        ) => transform_request_descriptor::<
             crate::openai::create_image::request::OpenAiCreateImageRequest,
             crate::gemini::generate_content::request::GeminiGenerateContentRequest,
-        >(&body),
+        >(&body, model),
 
         (
             OperationFamily::CreateImage,
@@ -1147,10 +1147,10 @@ pub fn transform_request(
             ProtocolKind::OpenAi,
             OperationFamily::GenerateContent,
             ProtocolKind::OpenAiResponse,
-        ) => transform_json::<
+        ) => transform_request_descriptor::<
             crate::openai::create_image::request::OpenAiCreateImageRequest,
             crate::openai::create_response::request::OpenAiCreateResponseRequest,
-        >(&body),
+        >(&body, model),
 
         // =====================================================================
         // create_image_edit
@@ -1166,10 +1166,10 @@ pub fn transform_request(
             ProtocolKind::OpenAi,
             OperationFamily::StreamGenerateContent,
             ProtocolKind::Gemini,
-        ) => transform_json::<
+        ) => transform_request_descriptor::<
             crate::openai::create_image_edit::request::OpenAiCreateImageEditRequest,
             crate::gemini::generate_content::request::GeminiGenerateContentRequest,
-        >(&body),
+        >(&body, model),
 
         (
             OperationFamily::CreateImageEdit,
@@ -1182,10 +1182,10 @@ pub fn transform_request(
             ProtocolKind::OpenAi,
             OperationFamily::GenerateContent,
             ProtocolKind::OpenAiResponse,
-        ) => transform_json::<
+        ) => transform_request_descriptor::<
             crate::openai::create_image_edit::request::OpenAiCreateImageEditRequest,
             crate::openai::create_response::request::OpenAiCreateResponseRequest,
-        >(&body),
+        >(&body, model),
 
         // =====================================================================
         // compact
@@ -3168,6 +3168,46 @@ mod tests {
             "expected gemini countTokens body shape, got: {json}"
         );
         // Must NOT leak the envelope fields back out.
+        assert!(
+            json.get("method").is_none(),
+            "transformed body leaked the request envelope method field"
+        );
+    }
+
+    #[test]
+    fn transform_request_create_image_to_openai_response_accepts_bare_body() {
+        let body = br#"{
+          "model": "gpt-5.5-image-generate",
+          "prompt": "Generate a red circle on white.",
+          "n": 1,
+          "size": "1024x1024"
+        }"#
+        .to_vec();
+
+        let (_qout, transformed) = transform_request(
+            OperationFamily::CreateImage,
+            ProtocolKind::OpenAi,
+            OperationFamily::StreamGenerateContent,
+            ProtocolKind::OpenAiResponse,
+            None,
+            None,
+            body,
+        )
+        .expect("create image -> responses request transform should accept a raw body");
+
+        let json: Value = serde_json::from_slice(&transformed).expect("transformed json");
+        assert_eq!(
+            json.get("model").and_then(Value::as_str),
+            Some("gpt-5.5-image-generate")
+        );
+        assert_eq!(
+            json.pointer("/tools/0/type").and_then(Value::as_str),
+            Some("image_generation")
+        );
+        assert_eq!(
+            json.pointer("/tool_choice/type").and_then(Value::as_str),
+            Some("image_generation")
+        );
         assert!(
             json.get("method").is_none(),
             "transformed body leaked the request envelope method field"
