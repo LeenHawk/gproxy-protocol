@@ -1,6 +1,6 @@
 use crate::claude::create_message::types::JsonObject;
 use crate::claude::create_message::types::{
-    BetaCacheCreation, BetaServerToolUsage, BetaServiceTier, BetaSpeed, BetaUsage,
+    BetaCacheCreation, BetaServerToolUsage, BetaServiceTier, BetaUsage,
 };
 pub use crate::transform::claude::utils::{
     beta_message_content_to_text, beta_system_prompt_to_text, claude_model_to_string,
@@ -21,14 +21,12 @@ pub fn beta_usage_from_counts(
         cache_read_input_tokens: cached_input_tokens,
         inference_geo: String::new(),
         input_tokens,
-        iterations: Vec::new(),
         output_tokens,
         server_tool_use: BetaServerToolUsage {
             web_fetch_requests: 0,
             web_search_requests: 0,
         },
         service_tier,
-        speed: Some(BetaSpeed::Standard),
     }
 }
 

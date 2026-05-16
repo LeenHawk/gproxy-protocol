@@ -485,64 +485,16 @@ pub struct BetaUsage {
     pub cache_read_input_tokens: u64,
     pub inference_geo: String,
     pub input_tokens: u64,
-    #[serde(default)]
-    pub iterations: BetaIterationsUsage,
     pub output_tokens: u64,
     #[serde(default)]
     pub server_tool_use: BetaServerToolUsage,
     pub service_tier: BetaServiceTier,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub speed: Option<BetaSpeed>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BetaCacheCreation {
     pub ephemeral_1h_input_tokens: u64,
     pub ephemeral_5m_input_tokens: u64,
-}
-
-pub type BetaIterationsUsage = Vec<BetaIterationUsage>;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum BetaIterationUsage {
-    Message(BetaMessageIterationUsage),
-    Compaction(BetaCompactionIterationUsage),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BetaMessageIterationUsage {
-    pub cache_creation: BetaCacheCreation,
-    pub cache_creation_input_tokens: u64,
-    pub cache_read_input_tokens: u64,
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    #[serde(rename = "type")]
-    pub type_: BetaMessageIterationUsageType,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BetaMessageIterationUsageType {
-    #[serde(rename = "message")]
-    Message,
-}
-
-/// total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BetaCompactionIterationUsage {
-    pub cache_creation: BetaCacheCreation,
-    pub cache_creation_input_tokens: u64,
-    pub cache_read_input_tokens: u64,
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    #[serde(rename = "type")]
-    pub type_: BetaCompactionIterationUsageType,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BetaCompactionIterationUsageType {
-    #[serde(rename = "compaction")]
-    Compaction,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

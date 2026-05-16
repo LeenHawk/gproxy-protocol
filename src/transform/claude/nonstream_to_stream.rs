@@ -152,7 +152,6 @@ pub fn nonstream_to_stream(
                     cache_creation_input_tokens: Some(body.usage.cache_creation_input_tokens),
                     cache_read_input_tokens: Some(body.usage.cache_read_input_tokens),
                     input_tokens: Some(body.usage.input_tokens),
-                    iterations: Some(body.usage.iterations.clone()),
                     output_tokens: body.usage.output_tokens,
                     server_tool_use: Some(body.usage.server_tool_use.clone()),
                 },

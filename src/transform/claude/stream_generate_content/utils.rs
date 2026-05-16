@@ -110,7 +110,6 @@ pub fn message_delta_event(
             cache_creation_input_tokens: Some(0),
             cache_read_input_tokens: Some(cached_input_tokens),
             input_tokens: Some(input_tokens),
-            iterations: None,
             output_tokens,
             server_tool_use: None,
         },

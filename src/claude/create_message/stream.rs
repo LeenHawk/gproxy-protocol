@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::claude::create_message::types::{
-    BetaContainer, BetaContentBlock, BetaContextManagementResponse, BetaIterationsUsage,
-    BetaMessage, BetaServerToolUsage, BetaStopReason, BetaTextCitation,
+    BetaContainer, BetaContentBlock, BetaContextManagementResponse, BetaMessage,
+    BetaServerToolUsage, BetaStopReason, BetaTextCitation,
 };
 use crate::claude::types::BetaError;
 
@@ -78,8 +78,6 @@ pub struct BetaMessageDeltaUsage {
     pub cache_read_input_tokens: Option<u64>,
     #[serde(default)]
     pub input_tokens: Option<u64>,
-    #[serde(default)]
-    pub iterations: Option<BetaIterationsUsage>,
     pub output_tokens: u64,
     #[serde(default)]
     pub server_tool_use: Option<BetaServerToolUsage>,
