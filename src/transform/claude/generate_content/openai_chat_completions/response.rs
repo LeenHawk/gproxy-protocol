@@ -191,6 +191,7 @@ impl TryFrom<OpenAiChatCompletionsResponse> for ClaudeCreateMessageResponse {
                         role: BetaMessageRole::Assistant,
                         stop_reason,
                         stop_sequence: None,
+                        stop_details: None,
                         type_: BetaMessageType::Message,
                         usage,
                     },

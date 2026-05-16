@@ -26,6 +26,7 @@ pub fn message_start_event(
             role: BetaMessageRole::Assistant,
             stop_reason: None,
             stop_sequence: None,
+            stop_details: None,
             type_: BetaMessageType::Message,
             usage: beta_usage_from_counts(input_tokens, cached_input_tokens, 0, service_tier),
         },

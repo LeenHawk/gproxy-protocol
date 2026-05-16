@@ -122,8 +122,10 @@ pub struct BetaMessage {
     pub role: BetaMessageRole,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_reason: Option<BetaStopReason>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub stop_sequence: Option<String>,
+    #[serde(default)]
+    pub stop_details: Option<BetaStopDetails>,
     #[serde(rename = "type")]
     pub type_: BetaMessageType,
     pub usage: BetaUsage,
@@ -139,6 +141,27 @@ pub enum BetaMessageRole {
 pub enum BetaMessageType {
     #[serde(rename = "message")]
     Message,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum BetaStopDetails {
+    #[serde(rename = "refusal")]
+    Refusal(BetaRefusalStopDetails),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BetaRefusalStopDetails {
+    pub category: Option<BetaRefusalStopCategory>,
+    pub explanation: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BetaRefusalStopCategory {
+    #[serde(rename = "cyber")]
+    Cyber,
+    #[serde(rename = "bio")]
+    Bio,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -486,8 +509,8 @@ pub struct BetaUsage {
     pub inference_geo: String,
     pub input_tokens: u64,
     pub output_tokens: u64,
-    #[serde(default)]
-    pub server_tool_use: BetaServerToolUsage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_tool_use: Option<BetaServerToolUsage>,
     pub service_tier: BetaServiceTier,
 }
 

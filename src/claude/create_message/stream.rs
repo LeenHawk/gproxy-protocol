@@ -79,6 +79,6 @@ pub struct BetaMessageDeltaUsage {
     #[serde(default)]
     pub input_tokens: Option<u64>,
     pub output_tokens: u64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_tool_use: Option<BetaServerToolUsage>,
 }

@@ -175,7 +175,7 @@ impl TryFrom<Vec<ClaudeStreamEvent>> for ClaudeCreateMessageResponse {
                         message.usage.cache_creation_input_tokens = cache_creation_input_tokens;
                     }
                     if let Some(server_tool_use) = usage.server_tool_use {
-                        message.usage.server_tool_use = server_tool_use;
+                        message.usage.server_tool_use = Some(server_tool_use);
                     }
                     message.usage.output_tokens = usage.output_tokens;
                 }
