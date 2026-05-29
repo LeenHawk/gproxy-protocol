@@ -123,6 +123,31 @@ fn text_block(text: String) -> ct::BetaContentBlockParam {
     })
 }
 
+fn mid_conversation_system_block(text: String) -> Option<ct::BetaContentBlockParam> {
+    if text.is_empty() {
+        return None;
+    }
+
+    Some(ct::BetaContentBlockParam::MidConversationSystem(
+        ct::BetaMidConversationSystemBlockParam {
+            content: vec![ct::BetaTextBlockParam {
+                text,
+                type_: ct::BetaTextBlockType::Text,
+                cache_control: None,
+                citations: None,
+            }],
+            type_: ct::BetaMidConversationSystemBlockType::MidConvSystem,
+            cache_control: None,
+        },
+    ))
+}
+
+pub fn push_mid_conversation_system_block(messages: &mut Vec<ct::BetaMessageParam>, text: String) {
+    if let Some(block) = mid_conversation_system_block(text) {
+        push_message_block(messages, ct::BetaMessageRole::User, block);
+    }
+}
+
 fn parse_data_url_to_image_source(url: &str) -> Option<ct::BetaImageSource> {
     if !url.starts_with("data:") {
         return None;

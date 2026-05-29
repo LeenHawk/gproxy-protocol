@@ -1,3 +1,4 @@
 pub use crate::transform::claude::utils::{
-    beta_message_content_to_text, beta_system_prompt_to_text, claude_model_to_string,
+    beta_message_content_to_text, beta_mid_conversation_system_block_to_text,
+    beta_system_prompt_to_text, claude_model_to_string,
 };

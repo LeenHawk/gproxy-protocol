@@ -32,7 +32,8 @@ use crate::openai::create_chat_completions::types::{
     Metadata,
 };
 use crate::transform::claude::generate_content::utils::{
-    beta_message_content_to_text, beta_system_prompt_to_text, claude_model_to_string,
+    beta_message_content_to_text, beta_mid_conversation_system_block_to_text,
+    beta_system_prompt_to_text, claude_model_to_string,
 };
 use crate::transform::utils::TransformError;
 use serde_json::{Map, Value};
@@ -84,6 +85,37 @@ fn tool_input_schema_to_function_parameters(
     parameters
 }
 
+fn push_system_message(messages: &mut Vec<ChatCompletionMessageParam>, text: String) {
+    if text.is_empty() {
+        return;
+    }
+
+    messages.push(ChatCompletionMessageParam::System(
+        ChatCompletionSystemMessageParam {
+            content: ChatCompletionTextContent::Text(text),
+            role: ChatCompletionSystemRole::System,
+            name: None,
+        },
+    ));
+}
+
+fn flush_user_parts(
+    messages: &mut Vec<ChatCompletionMessageParam>,
+    user_parts: &mut Vec<ChatCompletionContentPart>,
+) {
+    if user_parts.is_empty() {
+        return;
+    }
+
+    messages.push(ChatCompletionMessageParam::User(
+        ChatCompletionUserMessageParam {
+            content: ChatCompletionUserContent::Parts(std::mem::take(user_parts)),
+            role: ChatCompletionUserRole::User,
+            name: None,
+        },
+    ));
+}
+
 impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
     type Error = TransformError;
 
@@ -93,28 +125,14 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
 
         let mut messages = Vec::new();
         if let Some(system) = beta_system_prompt_to_text(body.system) {
-            messages.push(ChatCompletionMessageParam::System(
-                ChatCompletionSystemMessageParam {
-                    content: ChatCompletionTextContent::Text(system),
-                    role: ChatCompletionSystemRole::System,
-                    name: None,
-                },
-            ));
+            push_system_message(&mut messages, system);
         }
 
         for message in body.messages {
             let fallback_text = beta_message_content_to_text(&message.content);
             match (message.role, message.content) {
                 (BetaMessageRole::System, _) => {
-                    if !fallback_text.is_empty() {
-                        messages.push(ChatCompletionMessageParam::System(
-                            ChatCompletionSystemMessageParam {
-                                content: ChatCompletionTextContent::Text(fallback_text),
-                                role: ChatCompletionSystemRole::System,
-                                name: None,
-                            },
-                        ));
-                    }
+                    push_system_message(&mut messages, fallback_text);
                 }
                 (BetaMessageRole::User, BetaMessageContent::Text(text)) => {
                     messages.push(ChatCompletionMessageParam::User(
@@ -128,6 +146,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
                 (BetaMessageRole::User, BetaMessageContent::Blocks(blocks)) => {
                     let mut user_parts = Vec::new();
                     let mut tool_messages = Vec::new();
+                    let mut emitted_mid_system = false;
 
                     for block in blocks {
                         match block {
@@ -235,6 +254,17 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
                                 }
                                 _ => {}
                             },
+                            BetaContentBlockParam::MidConversationSystem(block) => {
+                                flush_user_parts(&mut messages, &mut user_parts);
+                                if !tool_messages.is_empty() {
+                                    messages.extend(std::mem::take(&mut tool_messages));
+                                }
+                                push_system_message(
+                                    &mut messages,
+                                    beta_mid_conversation_system_block_to_text(&block),
+                                );
+                                emitted_mid_system = true;
+                            }
                             BetaContentBlockParam::ToolResult(block) => {
                                 let output = match block.content {
                                     Some(BetaToolResultBlockParamContent::Text(text)) => text,
@@ -281,21 +311,17 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
                     }
 
                     if user_parts.is_empty() {
-                        messages.push(ChatCompletionMessageParam::User(
-                            ChatCompletionUserMessageParam {
-                                content: ChatCompletionUserContent::Text(fallback_text),
-                                role: ChatCompletionUserRole::User,
-                                name: None,
-                            },
-                        ));
+                        if !emitted_mid_system {
+                            messages.push(ChatCompletionMessageParam::User(
+                                ChatCompletionUserMessageParam {
+                                    content: ChatCompletionUserContent::Text(fallback_text),
+                                    role: ChatCompletionUserRole::User,
+                                    name: None,
+                                },
+                            ));
+                        }
                     } else {
-                        messages.push(ChatCompletionMessageParam::User(
-                            ChatCompletionUserMessageParam {
-                                content: ChatCompletionUserContent::Parts(user_parts),
-                                role: ChatCompletionUserRole::User,
-                                name: None,
-                            },
-                        ));
+                        flush_user_parts(&mut messages, &mut user_parts);
                     }
 
                     messages.extend(tool_messages);
@@ -588,5 +614,117 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
                 ..RequestBody::default()
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::claude::count_tokens::types as ct;
+
+    fn request_with_messages(messages: Vec<ct::BetaMessageParam>) -> ClaudeCreateMessageRequest {
+        ClaudeCreateMessageRequest {
+            method: crate::claude::create_message::types::HttpMethod::Post,
+            path: crate::claude::create_message::request::PathParameters::default(),
+            query: crate::claude::create_message::request::QueryParameters::default(),
+            headers: crate::claude::create_message::request::RequestHeaders::default(),
+            body: crate::claude::create_message::request::RequestBody {
+                max_tokens: 1024,
+                messages,
+                model: ct::Model::Custom("claude-test".to_string()),
+                container: None,
+                context_management: None,
+                inference_geo: None,
+                mcp_servers: None,
+                metadata: None,
+                cache_control: None,
+                output_config: None,
+                service_tier: None,
+                speed: None,
+                stop_sequences: None,
+                stream: None,
+                system: None,
+                temperature: None,
+                thinking: None,
+                tool_choice: None,
+                tools: None,
+                top_k: None,
+                top_p: None,
+            },
+        }
+    }
+
+    fn chat_message_text(message: &ChatCompletionMessageParam) -> Option<(&'static str, String)> {
+        match message {
+            ChatCompletionMessageParam::System(message) => match &message.content {
+                ChatCompletionTextContent::Text(text) => Some(("system", text.clone())),
+                ChatCompletionTextContent::Parts(_) => None,
+            },
+            ChatCompletionMessageParam::User(message) => match &message.content {
+                ChatCompletionUserContent::Text(text) => Some(("user", text.clone())),
+                ChatCompletionUserContent::Parts(parts) => {
+                    let text = parts
+                        .iter()
+                        .filter_map(|part| match part {
+                            ChatCompletionContentPart::Text(part) => Some(part.text.as_str()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    Some(("user", text))
+                }
+            },
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn mid_conversation_system_block_becomes_chat_system_message() {
+        let request = request_with_messages(vec![ct::BetaMessageParam {
+            role: ct::BetaMessageRole::User,
+            content: ct::BetaMessageContent::Blocks(vec![
+                ct::BetaContentBlockParam::Text(ct::BetaTextBlockParam {
+                    text: "First user turn".to_string(),
+                    type_: ct::BetaTextBlockType::Text,
+                    cache_control: None,
+                    citations: None,
+                }),
+                ct::BetaContentBlockParam::MidConversationSystem(
+                    ct::BetaMidConversationSystemBlockParam {
+                        content: vec![ct::BetaTextBlockParam {
+                            text: "Apply the new policy now.".to_string(),
+                            type_: ct::BetaTextBlockType::Text,
+                            cache_control: None,
+                            citations: None,
+                        }],
+                        type_: ct::BetaMidConversationSystemBlockType::MidConvSystem,
+                        cache_control: None,
+                    },
+                ),
+                ct::BetaContentBlockParam::Text(ct::BetaTextBlockParam {
+                    text: "Second user turn".to_string(),
+                    type_: ct::BetaTextBlockType::Text,
+                    cache_control: None,
+                    citations: None,
+                }),
+            ]),
+        }]);
+
+        let converted = OpenAiChatCompletionsRequest::try_from(request).expect("request converts");
+        let messages = converted
+            .body
+            .messages
+            .iter()
+            .filter_map(chat_message_text)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            messages,
+            vec![
+                ("user", "First user turn".to_string()),
+                ("system", "Apply the new policy now.".to_string()),
+                ("user", "Second user turn".to_string()),
+            ]
+        );
     }
 }

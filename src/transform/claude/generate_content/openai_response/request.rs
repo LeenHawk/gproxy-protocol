@@ -26,7 +26,8 @@ use crate::openai::create_response::types::{
     Metadata, ResponseContextManagementEntry, ResponseContextManagementType, ResponseServiceTier,
 };
 use crate::transform::claude::generate_content::utils::{
-    beta_message_content_to_text, beta_system_prompt_to_text, claude_model_to_string,
+    beta_message_content_to_text, beta_mid_conversation_system_block_to_text,
+    beta_system_prompt_to_text, claude_model_to_string,
 };
 use crate::transform::utils::TransformError;
 use serde_json::{Map, Value};
@@ -85,6 +86,20 @@ fn input_text_content(text: String) -> ot::ResponseInputContent {
         text,
         type_: ot::ResponseInputTextType::InputText,
     })
+}
+
+fn push_system_input_message(input_items: &mut Vec<ResponseInputItem>, text: String) {
+    if text.is_empty() {
+        return;
+    }
+
+    input_items.push(ResponseInputItem::Message(ResponseInputMessage {
+        content: ResponseInputMessageContent::Text(text),
+        role: ResponseInputMessageRole::System,
+        phase: None,
+        status: None,
+        type_: Some(ResponseInputMessageType::Message),
+    }));
 }
 
 fn flush_input_parts(
@@ -848,15 +863,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
             let fallback_text = beta_message_content_to_text(&message.content);
             match (message.role, message.content) {
                 (BetaMessageRole::System, _) => {
-                    if !fallback_text.is_empty() {
-                        input_items.push(ResponseInputItem::Message(ResponseInputMessage {
-                            content: ResponseInputMessageContent::Text(fallback_text),
-                            role: ResponseInputMessageRole::System,
-                            phase: None,
-                            status: None,
-                            type_: Some(ResponseInputMessageType::Message),
-                        }));
-                    }
+                    push_system_input_message(&mut input_items, fallback_text);
                 }
                 (BetaMessageRole::User, ct::BetaMessageContent::Text(text)) => {
                     if !text.is_empty() {
@@ -878,6 +885,17 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                         }
 
                         match block {
+                            ct::BetaContentBlockParam::MidConversationSystem(block) => {
+                                flush_input_parts(
+                                    &mut input_items,
+                                    ResponseInputMessageRole::User,
+                                    &mut message_parts,
+                                );
+                                push_system_input_message(
+                                    &mut input_items,
+                                    beta_mid_conversation_system_block_to_text(&block),
+                                );
+                            }
                             ct::BetaContentBlockParam::ToolResult(block) => {
                                 flush_input_parts(
                                     &mut input_items,
@@ -2065,6 +2083,48 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
 mod tests {
     use super::*;
 
+    fn request_with_messages(messages: Vec<ct::BetaMessageParam>) -> ClaudeCreateMessageRequest {
+        ClaudeCreateMessageRequest {
+            method: crate::claude::create_message::types::HttpMethod::Post,
+            path: crate::claude::create_message::request::PathParameters::default(),
+            query: crate::claude::create_message::request::QueryParameters::default(),
+            headers: crate::claude::create_message::request::RequestHeaders::default(),
+            body: crate::claude::create_message::request::RequestBody {
+                max_tokens: 1024,
+                messages,
+                model: ct::Model::Custom("claude-test".to_string()),
+                container: None,
+                context_management: None,
+                inference_geo: None,
+                mcp_servers: None,
+                metadata: None,
+                cache_control: None,
+                output_config: None,
+                service_tier: None,
+                speed: None,
+                stop_sequences: None,
+                stream: None,
+                system: None,
+                temperature: None,
+                thinking: None,
+                tool_choice: None,
+                tools: None,
+                top_k: None,
+                top_p: None,
+            },
+        }
+    }
+
+    fn response_message_text(item: &ResponseInputItem) -> Option<(ResponseInputMessageRole, &str)> {
+        match item {
+            ResponseInputItem::Message(message) => match &message.content {
+                ResponseInputMessageContent::Text(text) => Some((message.role.clone(), text)),
+                ResponseInputMessageContent::List(_) => None,
+            },
+            _ => None,
+        }
+    }
+
     #[test]
     fn claude_thinking_history_preserves_response_reasoning_signature_and_content() {
         let request = ClaudeCreateMessageRequest {
@@ -2137,6 +2197,60 @@ mod tests {
         assert_eq!(
             reasoning[1].encrypted_content.as_deref(),
             Some("ciphertext")
+        );
+    }
+
+    #[test]
+    fn mid_conversation_system_block_becomes_response_system_message() {
+        let request = request_with_messages(vec![ct::BetaMessageParam {
+            role: ct::BetaMessageRole::User,
+            content: ct::BetaMessageContent::Blocks(vec![
+                ct::BetaContentBlockParam::Text(ct::BetaTextBlockParam {
+                    text: "First user turn".to_string(),
+                    type_: ct::BetaTextBlockType::Text,
+                    cache_control: None,
+                    citations: None,
+                }),
+                ct::BetaContentBlockParam::MidConversationSystem(
+                    ct::BetaMidConversationSystemBlockParam {
+                        content: vec![ct::BetaTextBlockParam {
+                            text: "Apply the new policy now.".to_string(),
+                            type_: ct::BetaTextBlockType::Text,
+                            cache_control: None,
+                            citations: None,
+                        }],
+                        type_: ct::BetaMidConversationSystemBlockType::MidConvSystem,
+                        cache_control: None,
+                    },
+                ),
+                ct::BetaContentBlockParam::Text(ct::BetaTextBlockParam {
+                    text: "Second user turn".to_string(),
+                    type_: ct::BetaTextBlockType::Text,
+                    cache_control: None,
+                    citations: None,
+                }),
+            ]),
+        }]);
+
+        let converted = OpenAiCreateResponseRequest::try_from(request).expect("request converts");
+        let Some(ResponseInput::Items(items)) = converted.body.input else {
+            panic!("expected response input items");
+        };
+
+        let messages = items
+            .iter()
+            .filter_map(response_message_text)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            messages,
+            vec![
+                (ResponseInputMessageRole::User, "First user turn"),
+                (
+                    ResponseInputMessageRole::System,
+                    "Apply the new policy now."
+                ),
+                (ResponseInputMessageRole::User, "Second user turn"),
+            ]
         );
     }
 }

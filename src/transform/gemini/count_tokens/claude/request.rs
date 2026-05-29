@@ -71,3 +71,59 @@ impl TryFrom<GeminiCountTokensRequest> for ClaudeCountTokensRequest {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::claude::count_tokens::types as ct;
+    use crate::gemini::count_tokens::request as gemini_request;
+    use crate::gemini::count_tokens::types::{
+        GeminiContent, GeminiContentRole, GeminiGenerateContentRequest, GeminiPart,
+    };
+
+    #[test]
+    fn system_instruction_maps_to_claude_count_top_level_system() {
+        let request = GeminiCountTokensRequest {
+            method: crate::gemini::types::HttpMethod::Post,
+            path: gemini_request::PathParameters {
+                model: "models/claude-test".to_string(),
+            },
+            query: gemini_request::QueryParameters::default(),
+            headers: gemini_request::RequestHeaders::default(),
+            body: gemini_request::RequestBody {
+                contents: None,
+                generate_content_request: Some(GeminiGenerateContentRequest {
+                    model: "models/claude-test".to_string(),
+                    contents: vec![GeminiContent {
+                        parts: vec![GeminiPart {
+                            text: Some("Hello".to_string()),
+                            ..Default::default()
+                        }],
+                        role: Some(GeminiContentRole::User),
+                    }],
+                    system_instruction: Some(GeminiContent {
+                        parts: vec![GeminiPart {
+                            text: Some("Top-level system".to_string()),
+                            ..Default::default()
+                        }],
+                        role: None,
+                    }),
+                    ..Default::default()
+                }),
+            },
+        };
+
+        let claude_request = ClaudeCountTokensRequest::try_from(request).expect("transform");
+
+        assert_eq!(
+            claude_request.body.system,
+            Some(ct::BetaSystemPrompt::Text("Top-level system".to_string()))
+        );
+        assert_eq!(claude_request.body.messages.len(), 1);
+        assert!(matches!(
+            claude_request.body.messages[0].content,
+            ct::BetaMessageContent::Blocks(ref blocks)
+                if matches!(blocks.first(), Some(ct::BetaContentBlockParam::Text(block)) if block.text == "Hello")
+        ));
+    }
+}

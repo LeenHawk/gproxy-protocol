@@ -129,9 +129,24 @@ pub fn beta_system_prompt_to_text(system: Option<BetaSystemPrompt>) -> Option<St
     if text.is_empty() { None } else { Some(text) }
 }
 
+pub fn beta_mid_conversation_system_block_to_text(
+    block: &ct::BetaMidConversationSystemBlockParam,
+) -> String {
+    block
+        .content
+        .iter()
+        .map(|part| part.text.as_str())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn beta_content_block_to_text(block: &BetaContentBlockParam) -> String {
     match block {
         BetaContentBlockParam::Text(block) => block.text.clone(),
+        BetaContentBlockParam::MidConversationSystem(block) => {
+            beta_mid_conversation_system_block_to_text(block)
+        }
         _ => "[unsupported_content_block]".to_string(),
     }
 }

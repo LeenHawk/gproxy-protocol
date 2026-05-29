@@ -12,10 +12,12 @@ use crate::transform::openai::count_tokens::claude::utils::{
     ClaudeToolUseIdMapper, mcp_allowed_tools_to_configs, openai_mcp_tool_to_server,
     openai_message_content_to_claude, openai_reasoning_item_to_claude_blocks,
     openai_reasoning_to_claude, openai_role_to_claude, openai_tool_choice_to_claude,
-    parallel_disable, push_message_block, response_input_contents_to_tool_result_content,
-    tool_from_function,
+    parallel_disable, push_message_block, push_mid_conversation_system_block,
+    response_input_contents_to_tool_result_content, tool_from_function,
 };
-use crate::transform::openai::count_tokens::utils::openai_input_to_items;
+use crate::transform::openai::count_tokens::utils::{
+    openai_input_to_items, openai_message_content_to_text,
+};
 use crate::transform::utils::{TransformError, enforce_anthropic_strict_schema};
 
 fn parse_tool_use_input(input: String) -> ct::JsonObject {
@@ -61,10 +63,19 @@ impl TryFrom<OpenAiCreateResponseRequest> for ClaudeCreateMessageRequest {
         for item in openai_input_to_items(body.input.clone()) {
             match item {
                 ot::ResponseInputItem::Message(message) => {
-                    messages.push(ct::BetaMessageParam {
-                        content: openai_message_content_to_claude(message.content),
-                        role: openai_role_to_claude(message.role),
-                    });
+                    if matches!(
+                        message.role,
+                        ot::ResponseInputMessageRole::System
+                            | ot::ResponseInputMessageRole::Developer
+                    ) {
+                        let text = openai_message_content_to_text(&message.content);
+                        push_mid_conversation_system_block(&mut messages, text);
+                    } else {
+                        messages.push(ct::BetaMessageParam {
+                            content: openai_message_content_to_claude(message.content),
+                            role: openai_role_to_claude(message.role),
+                        });
+                    }
                 }
                 ot::ResponseInputItem::OutputMessage(message) => {
                     let text = message
@@ -995,5 +1006,59 @@ mod tests {
             ct::BetaContentBlockParam::RedactedThinking(block)
                 if block.data == "ciphertext"
         ));
+    }
+
+    #[test]
+    fn response_system_input_item_maps_to_mid_conversation_system_block() {
+        let body = serde_json::from_value(serde_json::json!({
+            "model": "claude-test",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [{ "type": "input_text", "text": "First user turn" }]
+                },
+                {
+                    "role": "system",
+                    "content": [{ "type": "input_text", "text": "Apply the new policy now." }]
+                },
+                {
+                    "role": "user",
+                    "content": [{ "type": "input_text", "text": "Second user turn" }]
+                }
+            ]
+        }))
+        .expect("Responses body should deserialize");
+        let request = OpenAiCreateResponseRequest {
+            body,
+            ..Default::default()
+        };
+
+        let converted = ClaudeCreateMessageRequest::try_from(request).expect("request converts");
+        assert!(converted.body.system.is_none());
+
+        let ct::BetaMessageContent::Blocks(blocks) = &converted.body.messages[0].content else {
+            panic!("expected first Claude message to be promoted to blocks");
+        };
+        assert!(matches!(
+            &blocks[0],
+            ct::BetaContentBlockParam::Text(block) if block.text == "First user turn"
+        ));
+        assert!(matches!(
+            &blocks[1],
+            ct::BetaContentBlockParam::MidConversationSystem(block)
+                if block.content.first().map(|part| part.text.as_str())
+                    == Some("Apply the new policy now.")
+        ));
+        assert_eq!(
+            converted.body.messages[1].content,
+            ct::BetaMessageContent::Blocks(vec![ct::BetaContentBlockParam::Text(
+                ct::BetaTextBlockParam {
+                    text: "Second user turn".to_string(),
+                    type_: ct::BetaTextBlockType::Text,
+                    cache_control: None,
+                    citations: None,
+                }
+            )])
+        );
     }
 }

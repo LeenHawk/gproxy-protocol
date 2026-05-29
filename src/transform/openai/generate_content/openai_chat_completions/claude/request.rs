@@ -15,7 +15,8 @@ use crate::transform::claude::utils::claude_model_supports_enabled_thinking;
 use crate::transform::openai::count_tokens::claude::utils::{
     ClaudeToolUseIdMapper, mcp_allowed_tools_to_configs, openai_mcp_tool_to_server,
     openai_message_content_to_claude, openai_reasoning_to_claude, openai_role_to_claude,
-    openai_tool_choice_to_claude, parallel_disable, push_message_block, tool_from_function,
+    openai_tool_choice_to_claude, parallel_disable, push_message_block,
+    push_mid_conversation_system_block, tool_from_function,
 };
 use crate::transform::openai::count_tokens::utils::openai_message_content_to_text;
 use crate::transform::openai::generate_content::openai_chat_completions::utils::{
@@ -80,10 +81,8 @@ impl TryFrom<OpenAiChatCompletionsRequest> for ClaudeCreateMessageRequest {
                             system_blocks.push(system_text_block(text));
                         }
                     } else {
-                        messages.push(ct::BetaMessageParam {
-                            content: openai_message_content_to_claude(content),
-                            role: openai_role_to_claude(ot::ResponseInputMessageRole::Developer),
-                        });
+                        let text = openai_message_content_to_text(&content);
+                        push_mid_conversation_system_block(&mut messages, text);
                     }
                 }
                 oct::ChatCompletionMessageParam::System(message) => {
@@ -95,10 +94,8 @@ impl TryFrom<OpenAiChatCompletionsRequest> for ClaudeCreateMessageRequest {
                             system_blocks.push(system_text_block(text));
                         }
                     } else {
-                        messages.push(ct::BetaMessageParam {
-                            content: openai_message_content_to_claude(content),
-                            role: openai_role_to_claude(ot::ResponseInputMessageRole::System),
-                        });
+                        let text = openai_message_content_to_text(&content);
+                        push_mid_conversation_system_block(&mut messages, text);
                     }
                 }
                 oct::ChatCompletionMessageParam::User(message) => {
@@ -519,4 +516,47 @@ fn default_chat_thinking() -> ct::BetaThinkingConfigParam {
     ct::BetaThinkingConfigParam::Disabled(ct::BetaThinkingConfigDisabled {
         type_: ct::BetaThinkingConfigDisabledType::Disabled,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mid_chat_system_message_maps_to_mid_conversation_system_block() {
+        let body = serde_json::from_value(serde_json::json!({
+            "model": "claude-test",
+            "messages": [
+                { "role": "user", "content": "First user turn" },
+                { "role": "system", "content": "Apply the new policy now." },
+                { "role": "user", "content": "Second user turn" }
+            ]
+        }))
+        .expect("chat body should deserialize");
+        let request = OpenAiChatCompletionsRequest {
+            body,
+            ..Default::default()
+        };
+
+        let converted = ClaudeCreateMessageRequest::try_from(request).expect("request converts");
+        assert!(converted.body.system.is_none());
+
+        let ct::BetaMessageContent::Blocks(blocks) = &converted.body.messages[0].content else {
+            panic!("expected first Claude message to be promoted to blocks");
+        };
+        assert!(matches!(
+            &blocks[0],
+            ct::BetaContentBlockParam::Text(block) if block.text == "First user turn"
+        ));
+        assert!(matches!(
+            &blocks[1],
+            ct::BetaContentBlockParam::MidConversationSystem(block)
+                if block.content.first().map(|part| part.text.as_str())
+                    == Some("Apply the new policy now.")
+        ));
+        assert_eq!(
+            converted.body.messages[1].content,
+            ct::BetaMessageContent::Text("Second user turn".to_string())
+        );
+    }
 }

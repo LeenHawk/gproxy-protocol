@@ -118,6 +118,7 @@ pub enum BetaContentBlockParam {
     McpToolUse(BetaMcpToolUseBlockParam),
     McpToolResult(BetaRequestMcpToolResultBlockParam),
     ContainerUpload(BetaContainerUploadBlockParam),
+    MidConversationSystem(BetaMidConversationSystemBlockParam),
     Compaction(BetaCompactionBlockParam),
 }
 
@@ -1047,6 +1048,21 @@ pub enum BetaContainerUploadBlockType {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BetaMidConversationSystemBlockParam {
+    pub content: Vec<BetaTextBlockParam>,
+    #[serde(rename = "type")]
+    pub type_: BetaMidConversationSystemBlockType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<BetaCacheControlEphemeral>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BetaMidConversationSystemBlockType {
+    #[serde(rename = "mid_conv_system")]
+    MidConvSystem,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BetaCompactionBlockParam {
     pub content: Option<String>,
     #[serde(rename = "type")]
@@ -1507,8 +1523,9 @@ pub enum BetaThinkingDisplay {
 #[cfg(test)]
 mod tests {
     use super::{
-        BetaMessageParam, BetaMessageRole, BetaOutputConfig, BetaOutputEffort, BetaTaskBudget,
-        BetaTaskBudgetType, BetaToolAllowedCaller, BetaToolUnion, Model, ModelKnown,
+        BetaContentBlockParam, BetaMessageContent, BetaMessageParam, BetaMessageRole,
+        BetaOutputConfig, BetaOutputEffort, BetaTaskBudget, BetaTaskBudgetType,
+        BetaToolAllowedCaller, BetaToolUnion, Model, ModelKnown,
     };
 
     #[test]
@@ -1565,6 +1582,37 @@ mod tests {
         .expect("system message role");
 
         assert_eq!(message.role, BetaMessageRole::System);
+    }
+
+    #[test]
+    fn content_blocks_accept_mid_conversation_system() {
+        let message: BetaMessageParam = serde_json::from_value(serde_json::json!({
+            "role": "user",
+            "content": [
+                {
+                    "type": "mid_conv_system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "From here, keep answers terse.",
+                            "cache_control": { "type": "ephemeral" }
+                        }
+                    ],
+                    "cache_control": { "type": "ephemeral" }
+                }
+            ]
+        }))
+        .expect("mid conversation system block");
+
+        let BetaMessageContent::Blocks(blocks) = message.content else {
+            panic!("expected content blocks");
+        };
+        assert!(matches!(
+            blocks.first(),
+            Some(BetaContentBlockParam::MidConversationSystem(block))
+                if block.content.first().map(|part| part.text.as_str())
+                    == Some("From here, keep answers terse.")
+        ));
     }
 
     #[test]
