@@ -312,27 +312,25 @@ impl TryFrom<OpenAiCreateResponseRequest> for OpenAiChatCompletionsRequest {
                 }
                 ot::ResponseInputItem::FunctionCallOutput(output) => {
                     flush_pending_assistant(&mut messages, &mut pending_assistant);
-                    let tool_call_id = output.id.unwrap_or(output.call_id);
                     messages.push(ct::ChatCompletionMessageParam::Tool(
                         ct::ChatCompletionToolMessageParam {
                             content: ct::ChatCompletionTextContent::Text(
                                 openai_function_call_output_content_to_text(&output.output),
                             ),
                             role: ct::ChatCompletionToolRole::Tool,
-                            tool_call_id,
+                            tool_call_id: output.call_id,
                         },
                     ));
                 }
                 ot::ResponseInputItem::CustomToolCallOutput(output) => {
                     flush_pending_assistant(&mut messages, &mut pending_assistant);
-                    let tool_call_id = output.id.unwrap_or(output.call_id);
                     messages.push(ct::ChatCompletionMessageParam::Tool(
                         ct::ChatCompletionToolMessageParam {
                             content: ct::ChatCompletionTextContent::Text(
                                 custom_call_output_to_text(&output.output),
                             ),
                             role: ct::ChatCompletionToolRole::Tool,
-                            tool_call_id,
+                            tool_call_id: output.call_id,
                         },
                     ));
                 }
@@ -415,6 +413,59 @@ impl TryFrom<OpenAiCreateResponseRequest> for OpenAiChatCompletionsRequest {
 mod tests {
     use super::*;
     use crate::openai::create_response::request as rreq;
+
+    #[test]
+    fn function_call_output_uses_call_id_as_chat_tool_call_id() {
+        let request = OpenAiCreateResponseRequest {
+            body: rreq::RequestBody {
+                model: Some("deepseek-chat".to_string()),
+                input: Some(ot::ResponseInput::Items(vec![
+                    ot::ResponseInputItem::FunctionToolCall(ot::ResponseFunctionToolCall {
+                        arguments: "{}".to_string(),
+                        call_id: "call_123".to_string(),
+                        name: "lookup".to_string(),
+                        type_: ot::ResponseFunctionToolCallType::FunctionCall,
+                        id: Some("fc_item_123".to_string()),
+                        status: Some(ot::ResponseItemStatus::Completed),
+                    }),
+                    ot::ResponseInputItem::FunctionCallOutput(ot::ResponseFunctionCallOutput {
+                        call_id: "call_123".to_string(),
+                        output: ot::ResponseFunctionCallOutputContent::Text(
+                            "{\"ok\":true}".to_string(),
+                        ),
+                        type_: ot::ResponseFunctionCallOutputType::FunctionCallOutput,
+                        id: Some("fco_item_123".to_string()),
+                        status: Some(ot::ResponseItemStatus::Completed),
+                    }),
+                ])),
+                ..rreq::RequestBody::default()
+            },
+            ..OpenAiCreateResponseRequest::default()
+        };
+
+        let converted = OpenAiChatCompletionsRequest::try_from(request).unwrap();
+
+        let [first, second] = converted.body.messages.as_slice() else {
+            panic!("expected assistant tool call followed by tool output");
+        };
+        let ct::ChatCompletionMessageParam::Assistant(assistant) = first else {
+            panic!("expected assistant message first");
+        };
+        let tool_call = assistant
+            .tool_calls
+            .as_ref()
+            .and_then(|calls| calls.first())
+            .expect("assistant tool call");
+        assert!(matches!(
+            tool_call,
+            ct::ChatCompletionMessageToolCall::Function(call) if call.id == "call_123"
+        ));
+
+        let ct::ChatCompletionMessageParam::Tool(tool) = second else {
+            panic!("expected tool message second");
+        };
+        assert_eq!(tool.tool_call_id, "call_123");
+    }
 
     #[test]
     fn response_reasoning_items_preserve_chat_reasoning_details() {
