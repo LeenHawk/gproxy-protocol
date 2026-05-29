@@ -111,6 +111,7 @@ impl TryFrom<ClaudeCountTokensRequest> for OpenAiCountTokensRequest {
             let role = match message.role {
                 BetaMessageRole::User => ResponseInputMessageRole::User,
                 BetaMessageRole::Assistant => ResponseInputMessageRole::Assistant,
+                BetaMessageRole::System => ResponseInputMessageRole::System,
             };
             match message.content {
                 BetaMessageContent::Text(text) => {

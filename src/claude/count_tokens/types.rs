@@ -22,6 +22,8 @@ pub enum Model {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ModelKnown {
+    #[serde(rename = "claude-opus-4-8")]
+    ClaudeOpus48,
     #[serde(rename = "claude-opus-4-7")]
     ClaudeOpus47,
     #[serde(rename = "claude-opus-4-6")]
@@ -82,6 +84,8 @@ pub enum BetaMessageRole {
     User,
     #[serde(rename = "assistant")]
     Assistant,
+    #[serde(rename = "system")]
+    System,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1499,17 +1503,29 @@ pub enum BetaThinkingDisplay {
 #[cfg(test)]
 mod tests {
     use super::{
-        BetaOutputConfig, BetaOutputEffort, BetaTaskBudget, BetaTaskBudgetType, Model, ModelKnown,
+        BetaMessageParam, BetaMessageRole, BetaOutputConfig, BetaOutputEffort, BetaTaskBudget,
+        BetaTaskBudgetType, Model, ModelKnown,
     };
 
     #[test]
-    fn model_round_trips_claude_opus_47() {
-        let model: Model = serde_json::from_str(r#""claude-opus-4-7""#).expect("model");
-        assert_eq!(model, Model::Known(ModelKnown::ClaudeOpus47));
+    fn model_round_trips_claude_opus_48() {
+        let model: Model = serde_json::from_str(r#""claude-opus-4-8""#).expect("model");
+        assert_eq!(model, Model::Known(ModelKnown::ClaudeOpus48));
         assert_eq!(
             serde_json::to_string(&model).expect("serialize model"),
-            r#""claude-opus-4-7""#
+            r#""claude-opus-4-8""#
         );
+    }
+
+    #[test]
+    fn message_role_accepts_mid_conversation_system() {
+        let message: BetaMessageParam = serde_json::from_value(serde_json::json!({
+            "role": "system",
+            "content": "From now on, include explicit type annotations."
+        }))
+        .expect("system message role");
+
+        assert_eq!(message.role, BetaMessageRole::System);
     }
 
     #[test]

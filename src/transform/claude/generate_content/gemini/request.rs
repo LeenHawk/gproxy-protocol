@@ -122,6 +122,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for GeminiGenerateContentRequest {
                     role: Some(match message.role {
                         BetaMessageRole::User => GeminiContentRole::User,
                         BetaMessageRole::Assistant => GeminiContentRole::Model,
+                        BetaMessageRole::System => GeminiContentRole::User,
                     }),
                 }
             })

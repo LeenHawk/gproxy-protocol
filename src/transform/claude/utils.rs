@@ -67,6 +67,7 @@ pub fn claude_model_to_string(model: &Model) -> String {
     match model {
         Model::Custom(model) => model.clone(),
         Model::Known(model) => match model {
+            ModelKnown::ClaudeOpus48 => "claude-opus-4-8",
             ModelKnown::ClaudeOpus47 => "claude-opus-4-7",
             ModelKnown::ClaudeOpus46 => "claude-opus-4-6",
             ModelKnown::ClaudeOpus4520251101 => "claude-opus-4-5-20251101",
@@ -98,7 +99,7 @@ pub fn claude_model_to_string(model: &Model) -> String {
 pub fn claude_model_supports_enabled_thinking(model: Option<&Model>) -> bool {
     !matches!(
         model.map(claude_model_to_string).as_deref(),
-        Some("claude-opus-4-7")
+        Some("claude-opus-4-7" | "claude-opus-4-8")
     )
 }
 

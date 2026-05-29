@@ -105,6 +105,17 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiChatCompletionsRequest {
         for message in body.messages {
             let fallback_text = beta_message_content_to_text(&message.content);
             match (message.role, message.content) {
+                (BetaMessageRole::System, _) => {
+                    if !fallback_text.is_empty() {
+                        messages.push(ChatCompletionMessageParam::System(
+                            ChatCompletionSystemMessageParam {
+                                content: ChatCompletionTextContent::Text(fallback_text),
+                                role: ChatCompletionSystemRole::System,
+                                name: None,
+                            },
+                        ));
+                    }
+                }
                 (BetaMessageRole::User, BetaMessageContent::Text(text)) => {
                     messages.push(ChatCompletionMessageParam::User(
                         ChatCompletionUserMessageParam {

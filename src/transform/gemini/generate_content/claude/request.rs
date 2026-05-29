@@ -95,11 +95,11 @@ mod tests {
     };
 
     #[test]
-    fn opus_47_converts_budgeted_gemini_thinking_to_adaptive() {
+    fn opus_48_converts_budgeted_gemini_thinking_to_adaptive() {
         let request = GeminiGenerateContentRequest {
             method: crate::gemini::types::HttpMethod::Post,
             path: GeminiPathParameters {
-                model: "models/claude-opus-4-7".to_string(),
+                model: "models/claude-opus-4-8".to_string(),
             },
             query: GeminiQueryParameters::default(),
             headers: GeminiRequestHeaders::default(),

@@ -34,6 +34,7 @@ impl TryFrom<ClaudeCountTokensRequest> for GeminiCountTokensRequest {
                 role: Some(match message.role {
                     BetaMessageRole::User => GeminiContentRole::User,
                     BetaMessageRole::Assistant => GeminiContentRole::Model,
+                    BetaMessageRole::System => GeminiContentRole::User,
                 }),
             })
             .collect::<Vec<_>>();

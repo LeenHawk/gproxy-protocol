@@ -26,7 +26,7 @@ use crate::openai::create_response::types::{
     Metadata, ResponseContextManagementEntry, ResponseContextManagementType, ResponseServiceTier,
 };
 use crate::transform::claude::generate_content::utils::{
-    beta_system_prompt_to_text, claude_model_to_string,
+    beta_message_content_to_text, beta_system_prompt_to_text, claude_model_to_string,
 };
 use crate::transform::utils::TransformError;
 use serde_json::{Map, Value};
@@ -842,7 +842,19 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
         let mut reasoning_index = 0u64;
 
         for message in body.messages {
+            let fallback_text = beta_message_content_to_text(&message.content);
             match (message.role, message.content) {
+                (BetaMessageRole::System, _) => {
+                    if !fallback_text.is_empty() {
+                        input_items.push(ResponseInputItem::Message(ResponseInputMessage {
+                            content: ResponseInputMessageContent::Text(fallback_text),
+                            role: ResponseInputMessageRole::System,
+                            phase: None,
+                            status: None,
+                            type_: Some(ResponseInputMessageType::Message),
+                        }));
+                    }
+                }
                 (BetaMessageRole::User, ct::BetaMessageContent::Text(text)) => {
                     if !text.is_empty() {
                         input_items.push(ResponseInputItem::Message(ResponseInputMessage {

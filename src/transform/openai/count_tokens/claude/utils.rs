@@ -272,9 +272,10 @@ pub fn response_input_contents_to_tool_result_content(
 pub fn openai_role_to_claude(role: ot::ResponseInputMessageRole) -> ct::BetaMessageRole {
     match role {
         ot::ResponseInputMessageRole::Assistant => ct::BetaMessageRole::Assistant,
-        ot::ResponseInputMessageRole::User
-        | ot::ResponseInputMessageRole::System
-        | ot::ResponseInputMessageRole::Developer => ct::BetaMessageRole::User,
+        ot::ResponseInputMessageRole::User => ct::BetaMessageRole::User,
+        ot::ResponseInputMessageRole::System | ot::ResponseInputMessageRole::Developer => {
+            ct::BetaMessageRole::System
+        }
     }
 }
 
@@ -749,11 +750,11 @@ mod tests {
     }
 
     #[test]
-    fn opus_47_reasoning_uses_adaptive_thinking_instead_of_enabled_budget() {
+    fn opus_48_reasoning_uses_adaptive_thinking_instead_of_enabled_budget() {
         let thinking = openai_reasoning_to_claude(
             Some(reasoning(ot::ResponseReasoningEffort::High)),
             Some(8_192),
-            Some(&ct::Model::Known(ct::ModelKnown::ClaudeOpus47)),
+            Some(&ct::Model::Known(ct::ModelKnown::ClaudeOpus48)),
         )
         .expect("thinking config");
 
