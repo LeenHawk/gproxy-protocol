@@ -10,7 +10,7 @@ use crate::openai::create_chat_completions::types::{
     ChatCompletionFinishReason, ChatCompletionMessageToolCall, ChatCompletionServiceTier,
 };
 use crate::transform::claude::generate_content::utils::{
-    beta_usage_from_counts, parse_json_object_or_empty,
+    beta_usage_from_counts_and_thinking_tokens, parse_json_object_or_empty,
 };
 use crate::transform::claude::utils::beta_error_response_from_status_message;
 use crate::transform::openai::generate_content::openai_chat_completions::claude::utils::chat_reasoning_to_claude_blocks;
@@ -145,7 +145,7 @@ impl TryFrom<OpenAiChatCompletionsResponse> for ClaudeCreateMessageResponse {
                     }
                 };
 
-                let (input_tokens, cached_tokens, output_tokens) = body
+                let (input_tokens, cached_tokens, output_tokens, thinking_tokens) = body
                     .usage
                     .as_ref()
                     .map(|usage| {
@@ -163,17 +163,23 @@ impl TryFrom<OpenAiChatCompletionsResponse> for ClaudeCreateMessageResponse {
                             total_input_tokens.saturating_sub(cached_tokens),
                             cached_tokens,
                             usage.completion_tokens,
+                            usage
+                                .completion_tokens_details
+                                .as_ref()
+                                .and_then(|details| details.reasoning_tokens)
+                                .unwrap_or(0),
                         )
                     })
-                    .unwrap_or((0, 0, 0));
+                    .unwrap_or((0, 0, 0, 0));
                 let service_tier = match body.service_tier {
                     Some(ChatCompletionServiceTier::Priority) => BetaServiceTier::Priority,
                     _ => BetaServiceTier::Standard,
                 };
-                let usage = beta_usage_from_counts(
+                let usage = beta_usage_from_counts_and_thinking_tokens(
                     input_tokens,
                     cached_tokens,
                     output_tokens,
+                    thinking_tokens,
                     service_tier,
                 );
 

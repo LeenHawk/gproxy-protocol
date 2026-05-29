@@ -3,8 +3,9 @@ use crate::claude::create_message::stream::{
     BetaMessageDeltaUsage, BetaRawContentBlockDelta, BetaRawMessageDelta, ClaudeStreamEvent,
 };
 use crate::claude::create_message::types::{
-    BetaContentBlock, BetaMessage, BetaMessageRole, BetaMessageType, BetaServiceTier,
-    BetaStopReason, BetaTextBlock, BetaTextBlockType, BetaThinkingBlock, BetaToolUseBlock, Model,
+    BetaContentBlock, BetaMessage, BetaMessageRole, BetaMessageType, BetaOutputTokensDetails,
+    BetaServiceTier, BetaStopReason, BetaTextBlock, BetaTextBlockType, BetaThinkingBlock,
+    BetaToolUseBlock, Model,
 };
 use crate::claude::types::{BetaApiError, BetaApiErrorType, BetaError};
 use crate::transform::claude::generate_content::utils::beta_usage_from_counts;
@@ -99,6 +100,7 @@ pub fn message_delta_event(
     input_tokens: u64,
     cached_input_tokens: u64,
     output_tokens: u64,
+    thinking_tokens: u64,
 ) -> ClaudeStreamEvent {
     ClaudeStreamEvent::MessageDelta {
         context_management: None,
@@ -112,6 +114,7 @@ pub fn message_delta_event(
             cache_read_input_tokens: Some(cached_input_tokens),
             input_tokens: Some(input_tokens),
             output_tokens,
+            output_tokens_details: Some(BetaOutputTokensDetails { thinking_tokens }),
             server_tool_use: None,
         },
     }

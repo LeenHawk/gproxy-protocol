@@ -272,7 +272,8 @@ impl TryFrom<ClaudeCountTokensRequest> for OpenAiCountTokensRequest {
                         }));
                     }
                     BetaToolUnion::CodeExecution20250522(_)
-                    | BetaToolUnion::CodeExecution20250825(_) => {
+                    | BetaToolUnion::CodeExecution20250825(_)
+                    | BetaToolUnion::CodeExecution20260120(_) => {
                         converted_tools.push(ResponseTool::CodeInterpreter(
                             ResponseCodeInterpreterTool {
                                 container: ResponseCodeInterpreterContainer::Auto(
@@ -331,7 +332,51 @@ impl TryFrom<ClaudeCountTokensRequest> for OpenAiCountTokensRequest {
                             }),
                         }));
                     }
+                    BetaToolUnion::WebSearch20260209(tool) => {
+                        converted_tools.push(ResponseTool::WebSearch(ResponseWebSearchTool {
+                            type_: ResponseWebSearchToolType::WebSearch,
+                            filters: tool.allowed_domains.map(|allowed_domains| {
+                                ResponseWebSearchFilters {
+                                    allowed_domains: Some(allowed_domains),
+                                }
+                            }),
+                            search_context_size: None,
+                            user_location: tool.user_location.map(|location| {
+                                ResponseApproximateLocation {
+                                    city: location.city,
+                                    country: location.country,
+                                    region: location.region,
+                                    timezone: location.timezone,
+                                    type_: Some(ResponseApproximateLocationType::Approximate),
+                                }
+                            }),
+                        }));
+                    }
                     BetaToolUnion::WebFetch20250910(tool) => {
+                        converted_tools.push(ResponseTool::WebSearch(ResponseWebSearchTool {
+                            type_: ResponseWebSearchToolType::WebSearch,
+                            filters: tool.allowed_domains.map(|allowed_domains| {
+                                ResponseWebSearchFilters {
+                                    allowed_domains: Some(allowed_domains),
+                                }
+                            }),
+                            search_context_size: None,
+                            user_location: None,
+                        }));
+                    }
+                    BetaToolUnion::WebFetch20260209(tool) => {
+                        converted_tools.push(ResponseTool::WebSearch(ResponseWebSearchTool {
+                            type_: ResponseWebSearchToolType::WebSearch,
+                            filters: tool.allowed_domains.map(|allowed_domains| {
+                                ResponseWebSearchFilters {
+                                    allowed_domains: Some(allowed_domains),
+                                }
+                            }),
+                            search_context_size: None,
+                            user_location: None,
+                        }));
+                    }
+                    BetaToolUnion::WebFetch20260309(tool) => {
                         converted_tools.push(ResponseTool::WebSearch(ResponseWebSearchTool {
                             type_: ResponseWebSearchToolType::WebSearch,
                             filters: tool.allowed_domains.map(|allowed_domains| {

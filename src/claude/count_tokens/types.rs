@@ -26,6 +26,8 @@ pub enum ModelKnown {
     ClaudeOpus48,
     #[serde(rename = "claude-opus-4-7")]
     ClaudeOpus47,
+    #[serde(rename = "claude-mythos-preview")]
+    ClaudeMythosPreview,
     #[serde(rename = "claude-opus-4-6")]
     ClaudeOpus46,
     #[serde(rename = "claude-opus-4-5-20251101")]
@@ -412,6 +414,8 @@ pub struct BetaServerToolCaller {
 pub enum BetaServerToolCallerType {
     #[serde(rename = "code_execution_20250825")]
     CodeExecution20250825,
+    #[serde(rename = "code_execution_20260120")]
+    CodeExecution20260120,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1504,7 +1508,7 @@ pub enum BetaThinkingDisplay {
 mod tests {
     use super::{
         BetaMessageParam, BetaMessageRole, BetaOutputConfig, BetaOutputEffort, BetaTaskBudget,
-        BetaTaskBudgetType, Model, ModelKnown,
+        BetaTaskBudgetType, BetaToolAllowedCaller, BetaToolUnion, Model, ModelKnown,
     };
 
     #[test]
@@ -1515,6 +1519,41 @@ mod tests {
             serde_json::to_string(&model).expect("serialize model"),
             r#""claude-opus-4-8""#
         );
+    }
+
+    #[test]
+    fn model_round_trips_claude_mythos_preview() {
+        let model: Model = serde_json::from_str(r#""claude-mythos-preview""#).expect("model");
+        assert_eq!(model, Model::Known(ModelKnown::ClaudeMythosPreview));
+        assert_eq!(
+            serde_json::to_string(&model).expect("serialize model"),
+            r#""claude-mythos-preview""#
+        );
+    }
+
+    #[test]
+    fn accepts_2026_code_execution_and_web_fetch_tools() {
+        let caller: BetaToolAllowedCaller =
+            serde_json::from_str(r#""code_execution_20260120""#).expect("caller");
+        assert_eq!(caller, BetaToolAllowedCaller::CodeExecution20260120);
+
+        let code_execution: BetaToolUnion = serde_json::from_value(serde_json::json!({
+            "name": "code_execution",
+            "type": "code_execution_20260120"
+        }))
+        .expect("code execution tool");
+        assert!(matches!(
+            code_execution,
+            BetaToolUnion::CodeExecution20260120(_)
+        ));
+
+        let web_fetch: BetaToolUnion = serde_json::from_value(serde_json::json!({
+            "name": "web_fetch",
+            "type": "web_fetch_20260309",
+            "use_cache": false
+        }))
+        .expect("web fetch tool");
+        assert!(matches!(web_fetch, BetaToolUnion::WebFetch20260309(_)));
     }
 
     #[test]
@@ -1635,6 +1674,7 @@ pub enum BetaToolUnion {
     Bash20250124(BetaToolBash20250124),
     CodeExecution20250522(BetaCodeExecutionTool20250522),
     CodeExecution20250825(BetaCodeExecutionTool20250825),
+    CodeExecution20260120(BetaCodeExecutionTool20260120),
     ComputerUse20241022(BetaToolComputerUse20241022),
     Memory20250818(BetaMemoryTool20250818),
     ComputerUse20250124(BetaToolComputerUse20250124),
@@ -1644,7 +1684,10 @@ pub enum BetaToolUnion {
     TextEditor20250429(BetaToolTextEditor20250429),
     TextEditor20250728(BetaToolTextEditor20250728),
     WebSearch20250305(BetaWebSearchTool20250305),
+    WebSearch20260209(BetaWebSearchTool20260209),
     WebFetch20250910(BetaWebFetchTool20250910),
+    WebFetch20260209(BetaWebFetchTool20260209),
+    WebFetch20260309(BetaWebFetchTool20260309),
     ToolSearchBm25_20251119(BetaToolSearchToolBm25_20251119),
     ToolSearchRegex20251119(BetaToolSearchToolRegex20251119),
     McpToolset(BetaMcpToolset),
@@ -1656,6 +1699,8 @@ pub enum BetaToolAllowedCaller {
     Direct,
     #[serde(rename = "code_execution_20250825")]
     CodeExecution20250825,
+    #[serde(rename = "code_execution_20260120")]
+    CodeExecution20260120,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -1784,6 +1829,21 @@ pub struct BetaCodeExecutionTool20250825 {
 pub enum BetaCodeExecutionTool20250825Type {
     #[serde(rename = "code_execution_20250825")]
     CodeExecution20250825,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BetaCodeExecutionTool20260120 {
+    pub name: BetaCodeExecutionToolName,
+    #[serde(rename = "type")]
+    pub type_: BetaCodeExecutionTool20260120Type,
+    #[serde(flatten)]
+    pub common: BetaToolCommonFields,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BetaCodeExecutionTool20260120Type {
+    #[serde(rename = "code_execution_20260120")]
+    CodeExecution20260120,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1976,6 +2036,29 @@ pub enum BetaWebSearchTool20250305Type {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BetaWebSearchTool20260209 {
+    pub name: BetaWebSearchToolName,
+    #[serde(rename = "type")]
+    pub type_: BetaWebSearchTool20260209Type,
+    #[serde(flatten)]
+    pub common: BetaToolCommonFields,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_domains: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked_domains: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_uses: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_location: Option<BetaWebSearchUserLocation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BetaWebSearchTool20260209Type {
+    #[serde(rename = "web_search_20260209")]
+    WebSearch20260209,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BetaWebSearchUserLocation {
     #[serde(rename = "type")]
     pub type_: BetaWebSearchUserLocationType,
@@ -2024,6 +2107,58 @@ pub enum BetaWebFetchToolName {
 pub enum BetaWebFetchTool20250910Type {
     #[serde(rename = "web_fetch_20250910")]
     WebFetch20250910,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BetaWebFetchTool20260209 {
+    pub name: BetaWebFetchToolName,
+    #[serde(rename = "type")]
+    pub type_: BetaWebFetchTool20260209Type,
+    #[serde(flatten)]
+    pub common: BetaToolCommonFields,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_domains: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked_domains: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub citations: Option<BetaCitationsConfigParam>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_content_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_uses: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BetaWebFetchTool20260209Type {
+    #[serde(rename = "web_fetch_20260209")]
+    WebFetch20260209,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BetaWebFetchTool20260309 {
+    pub name: BetaWebFetchToolName,
+    #[serde(rename = "type")]
+    pub type_: BetaWebFetchTool20260309Type,
+    #[serde(flatten)]
+    pub common: BetaToolCommonFields,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_domains: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked_domains: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub citations: Option<BetaCitationsConfigParam>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_content_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_uses: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub use_cache: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BetaWebFetchTool20260309Type {
+    #[serde(rename = "web_fetch_20260309")]
+    WebFetch20260309,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -153,6 +153,7 @@ pub fn nonstream_to_stream(
                     cache_read_input_tokens: Some(body.usage.cache_read_input_tokens),
                     input_tokens: Some(body.usage.input_tokens),
                     output_tokens: body.usage.output_tokens,
+                    output_tokens_details: Some(body.usage.output_tokens_details.clone()),
                     server_tool_use: body.usage.server_tool_use.clone(),
                 },
             });

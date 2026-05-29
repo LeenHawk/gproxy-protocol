@@ -50,7 +50,8 @@ pub fn gemini_tools_from_claude(
                     });
                 }
                 BetaToolUnion::CodeExecution20250522(_)
-                | BetaToolUnion::CodeExecution20250825(_) => {
+                | BetaToolUnion::CodeExecution20250825(_)
+                | BetaToolUnion::CodeExecution20260120(_) => {
                     converted_tools.push(GeminiTool {
                         code_execution: Some(GeminiCodeExecution {}),
                         ..GeminiTool::default()
@@ -67,13 +68,15 @@ pub fn gemini_tools_from_claude(
                         ..GeminiTool::default()
                     });
                 }
-                BetaToolUnion::WebSearch20250305(_) => {
+                BetaToolUnion::WebSearch20250305(_) | BetaToolUnion::WebSearch20260209(_) => {
                     converted_tools.push(GeminiTool {
                         google_search: Some(GeminiGoogleSearch::default()),
                         ..GeminiTool::default()
                     });
                 }
-                BetaToolUnion::WebFetch20250910(_) => {
+                BetaToolUnion::WebFetch20250910(_)
+                | BetaToolUnion::WebFetch20260209(_)
+                | BetaToolUnion::WebFetch20260309(_) => {
                     converted_tools.push(GeminiTool {
                         url_context: Some(GeminiUrlContext {}),
                         ..GeminiTool::default()

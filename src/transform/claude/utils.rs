@@ -69,6 +69,7 @@ pub fn claude_model_to_string(model: &Model) -> String {
         Model::Known(model) => match model {
             ModelKnown::ClaudeOpus48 => "claude-opus-4-8",
             ModelKnown::ClaudeOpus47 => "claude-opus-4-7",
+            ModelKnown::ClaudeMythosPreview => "claude-mythos-preview",
             ModelKnown::ClaudeOpus46 => "claude-opus-4-6",
             ModelKnown::ClaudeOpus4520251101 => "claude-opus-4-5-20251101",
             ModelKnown::ClaudeOpus45 => "claude-opus-4-5",

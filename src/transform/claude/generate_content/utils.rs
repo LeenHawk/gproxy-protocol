@@ -1,5 +1,7 @@
 use crate::claude::create_message::types::JsonObject;
-use crate::claude::create_message::types::{BetaCacheCreation, BetaServiceTier, BetaUsage};
+use crate::claude::create_message::types::{
+    BetaCacheCreation, BetaOutputTokensDetails, BetaServiceTier, BetaUsage,
+};
 pub use crate::transform::claude::utils::{
     beta_message_content_to_text, beta_system_prompt_to_text, claude_model_to_string,
 };
@@ -8,6 +10,22 @@ pub fn beta_usage_from_counts(
     input_tokens: u64,
     cached_input_tokens: u64,
     output_tokens: u64,
+    service_tier: BetaServiceTier,
+) -> BetaUsage {
+    beta_usage_from_counts_and_thinking_tokens(
+        input_tokens,
+        cached_input_tokens,
+        output_tokens,
+        0,
+        service_tier,
+    )
+}
+
+pub fn beta_usage_from_counts_and_thinking_tokens(
+    input_tokens: u64,
+    cached_input_tokens: u64,
+    output_tokens: u64,
+    thinking_tokens: u64,
     service_tier: BetaServiceTier,
 ) -> BetaUsage {
     BetaUsage {
@@ -20,6 +38,7 @@ pub fn beta_usage_from_counts(
         inference_geo: "global".to_string(),
         input_tokens,
         output_tokens,
+        output_tokens_details: BetaOutputTokensDetails { thinking_tokens },
         server_tool_use: None,
         service_tier,
     }

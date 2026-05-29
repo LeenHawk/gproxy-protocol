@@ -7,7 +7,9 @@ use crate::claude::create_message::types::{
 use crate::claude::types::ClaudeResponseHeaders;
 use crate::gemini::generate_content::response::GeminiGenerateContentResponse;
 use crate::gemini::generate_content::types::{GeminiBlockReason, GeminiFinishReason};
-use crate::transform::claude::generate_content::utils::beta_usage_from_counts;
+use crate::transform::claude::generate_content::utils::{
+    beta_usage_from_counts, beta_usage_from_counts_and_thinking_tokens,
+};
 use crate::transform::claude::utils::beta_error_response_from_status_message;
 use crate::transform::utils::TransformError;
 
@@ -150,19 +152,21 @@ impl TryFrom<GeminiGenerateContentResponse> for ClaudeCreateMessageResponse {
                         .unwrap_or(0)
                         .saturating_add(usage_metadata.tool_use_prompt_token_count.unwrap_or(0));
                     let cached_tokens = usage_metadata.cached_content_token_count.unwrap_or(0);
+                    let thinking_tokens = usage_metadata.thoughts_token_count.unwrap_or(0);
                     let output_tokens = usage_metadata
                         .candidates_token_count
                         .unwrap_or(0)
-                        .saturating_add(usage_metadata.thoughts_token_count.unwrap_or(0));
+                        .saturating_add(thinking_tokens);
                     let total_input_tokens = usage_metadata
                         .total_token_count
                         .map(|total| total.saturating_sub(output_tokens))
                         .unwrap_or_else(|| prompt_input_tokens.saturating_add(cached_tokens));
                     let input_tokens = total_input_tokens.saturating_sub(cached_tokens);
-                    let usage = beta_usage_from_counts(
+                    let usage = beta_usage_from_counts_and_thinking_tokens(
                         input_tokens,
                         cached_tokens,
                         output_tokens,
+                        thinking_tokens,
                         BetaServiceTier::Standard,
                     );
 

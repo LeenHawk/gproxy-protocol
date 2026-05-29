@@ -15,7 +15,7 @@ use crate::openai::create_response::types::{
     ResponseIncompleteReason, ResponseOutputItem, ResponseServiceTier,
 };
 use crate::transform::claude::generate_content::utils::{
-    beta_usage_from_counts, parse_json_object_or_empty,
+    beta_usage_from_counts_and_thinking_tokens, parse_json_object_or_empty,
 };
 use crate::transform::claude::utils::beta_error_response_from_status_message;
 use crate::transform::utils::TransformError;
@@ -408,7 +408,7 @@ impl TryFrom<OpenAiCreateResponseResponse> for ClaudeCreateMessageResponse {
                     Some(BetaStopReason::EndTurn)
                 };
 
-                let (input_tokens, cached_tokens, output_tokens) = body
+                let (input_tokens, cached_tokens, output_tokens, thinking_tokens) = body
                     .usage
                     .as_ref()
                     .map(|usage| {
@@ -422,17 +422,19 @@ impl TryFrom<OpenAiCreateResponseResponse> for ClaudeCreateMessageResponse {
                             total_input_tokens.saturating_sub(cached_tokens),
                             cached_tokens,
                             usage.output_tokens,
+                            usage.output_tokens_details.reasoning_tokens,
                         )
                     })
-                    .unwrap_or((0, 0, 0));
+                    .unwrap_or((0, 0, 0, 0));
                 let service_tier = match body.service_tier {
                     Some(ResponseServiceTier::Priority) => BetaServiceTier::Priority,
                     _ => BetaServiceTier::Standard,
                 };
-                let usage: BetaUsage = beta_usage_from_counts(
+                let usage: BetaUsage = beta_usage_from_counts_and_thinking_tokens(
                     input_tokens,
                     cached_tokens,
                     output_tokens,
+                    thinking_tokens,
                     service_tier,
                 );
 

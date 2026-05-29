@@ -34,6 +34,7 @@ pub struct OpenAiResponseToClaudeStream {
     input_tokens: u64,
     cached_input_tokens: u64,
     output_tokens: u64,
+    thinking_tokens: u64,
     stop_reason: Option<BetaStopReason>,
     has_tool_use: bool,
     has_refusal: bool,
@@ -59,6 +60,7 @@ impl Default for OpenAiResponseToClaudeStream {
             input_tokens: 0,
             cached_input_tokens: 0,
             output_tokens: 0,
+            thinking_tokens: 0,
             stop_reason: None,
             has_tool_use: false,
             has_refusal: false,
@@ -115,6 +117,7 @@ impl OpenAiResponseToClaudeStream {
         self.input_tokens = total_input_tokens.saturating_sub(cached_tokens);
         self.cached_input_tokens = cached_tokens;
         self.output_tokens = usage.output_tokens;
+        self.thinking_tokens = usage.output_tokens_details.reasoning_tokens;
     }
 
     fn next_block(&mut self) -> u64 {
@@ -1150,6 +1153,7 @@ impl OpenAiResponseToClaudeStream {
             self.input_tokens,
             self.cached_input_tokens,
             self.output_tokens,
+            self.thinking_tokens,
         ));
         out.push(message_stop_event());
         self.state = StreamState::Finished;

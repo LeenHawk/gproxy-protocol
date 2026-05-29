@@ -694,7 +694,8 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                         );
                     }
                     BetaToolUnion::CodeExecution20250522(_)
-                    | BetaToolUnion::CodeExecution20250825(_) => {
+                    | BetaToolUnion::CodeExecution20250825(_)
+                    | BetaToolUnion::CodeExecution20260120(_) => {
                         tool_registry.insert(
                             "code_execution".to_string(),
                             ClaudeToolKind::CodeInterpreter,
@@ -705,10 +706,12 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                     | BetaToolUnion::ComputerUse20251124(_) => {
                         tool_registry.insert("computer".to_string(), ClaudeToolKind::Computer);
                     }
-                    BetaToolUnion::WebSearch20250305(_) => {
+                    BetaToolUnion::WebSearch20250305(_) | BetaToolUnion::WebSearch20260209(_) => {
                         tool_registry.insert("web_search".to_string(), ClaudeToolKind::WebSearch);
                     }
-                    BetaToolUnion::WebFetch20250910(_) => {
+                    BetaToolUnion::WebFetch20250910(_)
+                    | BetaToolUnion::WebFetch20260209(_)
+                    | BetaToolUnion::WebFetch20260309(_) => {
                         tool_registry.insert("web_fetch".to_string(), ClaudeToolKind::WebFetch);
                     }
                     BetaToolUnion::Bash20241022(_) | BetaToolUnion::Bash20250124(_) => {
@@ -1803,7 +1806,8 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                         }
                     }
                     BetaToolUnion::CodeExecution20250522(_)
-                    | BetaToolUnion::CodeExecution20250825(_) => {
+                    | BetaToolUnion::CodeExecution20250825(_)
+                    | BetaToolUnion::CodeExecution20260120(_) => {
                         converted_tools.push(ResponseTool::CodeInterpreter(
                             ResponseCodeInterpreterTool {
                                 container: ResponseCodeInterpreterContainer::Auto(
@@ -1862,7 +1866,51 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                             }),
                         }));
                     }
+                    BetaToolUnion::WebSearch20260209(tool) => {
+                        converted_tools.push(ResponseTool::WebSearch(ResponseWebSearchTool {
+                            type_: ResponseWebSearchToolType::WebSearch,
+                            filters: tool.allowed_domains.map(|allowed_domains| {
+                                ResponseWebSearchFilters {
+                                    allowed_domains: Some(allowed_domains),
+                                }
+                            }),
+                            search_context_size: None,
+                            user_location: tool.user_location.map(|location| {
+                                ResponseApproximateLocation {
+                                    city: location.city,
+                                    country: location.country,
+                                    region: location.region,
+                                    timezone: location.timezone,
+                                    type_: Some(ResponseApproximateLocationType::Approximate),
+                                }
+                            }),
+                        }));
+                    }
                     BetaToolUnion::WebFetch20250910(tool) => {
+                        converted_tools.push(ResponseTool::WebSearch(ResponseWebSearchTool {
+                            type_: ResponseWebSearchToolType::WebSearch,
+                            filters: tool.allowed_domains.map(|allowed_domains| {
+                                ResponseWebSearchFilters {
+                                    allowed_domains: Some(allowed_domains),
+                                }
+                            }),
+                            search_context_size: None,
+                            user_location: None,
+                        }));
+                    }
+                    BetaToolUnion::WebFetch20260209(tool) => {
+                        converted_tools.push(ResponseTool::WebSearch(ResponseWebSearchTool {
+                            type_: ResponseWebSearchToolType::WebSearch,
+                            filters: tool.allowed_domains.map(|allowed_domains| {
+                                ResponseWebSearchFilters {
+                                    allowed_domains: Some(allowed_domains),
+                                }
+                            }),
+                            search_context_size: None,
+                            user_location: None,
+                        }));
+                    }
+                    BetaToolUnion::WebFetch20260309(tool) => {
                         converted_tools.push(ResponseTool::WebSearch(ResponseWebSearchTool {
                             type_: ResponseWebSearchToolType::WebSearch,
                             filters: tool.allowed_domains.map(|allowed_domains| {

@@ -27,6 +27,7 @@ pub struct GeminiToClaudeStream {
     input_tokens: u64,
     cached_input_tokens: u64,
     output_tokens: u64,
+    thinking_tokens: u64,
     stop_reason: Option<BetaStopReason>,
     has_tool_use: bool,
     has_refusal: bool,
@@ -43,6 +44,7 @@ impl Default for GeminiToClaudeStream {
             input_tokens: 0,
             cached_input_tokens: 0,
             output_tokens: 0,
+            thinking_tokens: 0,
             stop_reason: None,
             has_tool_use: false,
             has_refusal: false,
@@ -68,10 +70,11 @@ impl GeminiToClaudeStream {
                 .unwrap_or(0)
                 .saturating_add(usage_metadata.tool_use_prompt_token_count.unwrap_or(0));
             let cached_tokens = usage_metadata.cached_content_token_count.unwrap_or(0);
+            let thinking_tokens = usage_metadata.thoughts_token_count.unwrap_or(0);
             let output_tokens = usage_metadata
                 .candidates_token_count
                 .unwrap_or(0)
-                .saturating_add(usage_metadata.thoughts_token_count.unwrap_or(0));
+                .saturating_add(thinking_tokens);
             let total_input_tokens = usage_metadata
                 .total_token_count
                 .map(|total| total.saturating_sub(output_tokens))
@@ -80,6 +83,7 @@ impl GeminiToClaudeStream {
             self.input_tokens = total_input_tokens.saturating_sub(cached_tokens);
             self.cached_input_tokens = cached_tokens;
             self.output_tokens = output_tokens;
+            self.thinking_tokens = thinking_tokens;
         }
     }
 
@@ -369,6 +373,7 @@ impl GeminiToClaudeStream {
             self.input_tokens,
             self.cached_input_tokens,
             self.output_tokens,
+            self.thinking_tokens,
         ));
         out.push(message_stop_event());
         self.state = StreamState::Finished;

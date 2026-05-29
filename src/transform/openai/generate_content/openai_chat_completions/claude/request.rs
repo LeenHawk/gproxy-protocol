@@ -352,10 +352,10 @@ impl TryFrom<OpenAiChatCompletionsRequest> for ClaudeCreateMessageRequest {
                     | ot::ResponseTool::LocalShell(_)
                     | ot::ResponseTool::Shell(_)
                     | ot::ResponseTool::ApplyPatch(_) => {
-                        converted_tools.push(ct::BetaToolUnion::CodeExecution20250825(
-                            ct::BetaCodeExecutionTool20250825 {
+                        converted_tools.push(ct::BetaToolUnion::CodeExecution20260120(
+                            ct::BetaCodeExecutionTool20260120 {
                                 name: ct::BetaCodeExecutionToolName::CodeExecution,
-                                type_: ct::BetaCodeExecutionTool20250825Type::CodeExecution20250825,
+                                type_: ct::BetaCodeExecutionTool20260120Type::CodeExecution20260120,
                                 common: ct::BetaToolCommonFields::default(),
                             },
                         ));

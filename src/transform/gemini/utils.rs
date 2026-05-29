@@ -1,6 +1,6 @@
 use crate::claude::count_tokens::types::{
-    BetaBase64ImageSource, BetaBase64SourceType, BetaCodeExecutionTool20250825,
-    BetaCodeExecutionTool20250825Type, BetaCodeExecutionToolName, BetaComputerToolName,
+    BetaBase64ImageSource, BetaBase64SourceType, BetaCodeExecutionTool20260120,
+    BetaCodeExecutionTool20260120Type, BetaCodeExecutionToolName, BetaComputerToolName,
     BetaContentBlockParam, BetaImageBlockParam, BetaImageBlockType, BetaImageMediaType,
     BetaImageSource, BetaJsonOutputFormat, BetaJsonOutputFormatType, BetaMessageParam,
     BetaMessageRole, BetaOutputConfig, BetaOutputEffort, BetaSystemPrompt, BetaTextBlockParam,
@@ -292,10 +292,10 @@ pub fn gemini_tools_to_claude(tools: Option<Vec<GeminiTool>>) -> Option<Vec<Beta
             }
 
             if tool.code_execution.is_some() {
-                mapped.push(BetaToolUnion::CodeExecution20250825(
-                    BetaCodeExecutionTool20250825 {
+                mapped.push(BetaToolUnion::CodeExecution20260120(
+                    BetaCodeExecutionTool20260120 {
                         name: BetaCodeExecutionToolName::CodeExecution,
-                        type_: BetaCodeExecutionTool20250825Type::CodeExecution20250825,
+                        type_: BetaCodeExecutionTool20260120Type::CodeExecution20260120,
                         common: BetaToolCommonFields::default(),
                     },
                 ));

@@ -509,9 +509,16 @@ pub struct BetaUsage {
     pub inference_geo: String,
     pub input_tokens: u64,
     pub output_tokens: u64,
+    #[serde(default)]
+    pub output_tokens_details: BetaOutputTokensDetails,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_tool_use: Option<BetaServerToolUsage>,
     pub service_tier: BetaServiceTier,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct BetaOutputTokensDetails {
+    pub thinking_tokens: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -524,4 +531,28 @@ pub struct BetaCacheCreation {
 pub struct BetaServerToolUsage {
     pub web_fetch_requests: u64,
     pub web_search_requests: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BetaUsage;
+
+    #[test]
+    fn usage_defaults_missing_output_tokens_details() {
+        let usage: BetaUsage = serde_json::from_value(serde_json::json!({
+            "cache_creation": {
+                "ephemeral_1h_input_tokens": 0,
+                "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 1,
+            "output_tokens": 2,
+            "service_tier": "standard"
+        }))
+        .expect("usage");
+
+        assert_eq!(usage.output_tokens_details.thinking_tokens, 0);
+    }
 }

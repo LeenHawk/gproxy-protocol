@@ -30,6 +30,7 @@ pub struct OpenAiChatCompletionsToClaudeStream {
     input_tokens: u64,
     cached_input_tokens: u64,
     output_tokens: u64,
+    thinking_tokens: u64,
     stop_reason: Option<BetaStopReason>,
     has_tool_use: bool,
     has_refusal: bool,
@@ -48,6 +49,7 @@ impl Default for OpenAiChatCompletionsToClaudeStream {
             input_tokens: 0,
             cached_input_tokens: 0,
             output_tokens: 0,
+            thinking_tokens: 0,
             stop_reason: None,
             has_tool_use: false,
             has_refusal: false,
@@ -74,6 +76,11 @@ impl OpenAiChatCompletionsToClaudeStream {
         self.input_tokens = total_input_tokens.saturating_sub(cached_tokens);
         self.cached_input_tokens = cached_tokens;
         self.output_tokens = usage.completion_tokens;
+        self.thinking_tokens = usage
+            .completion_tokens_details
+            .as_ref()
+            .and_then(|details| details.reasoning_tokens)
+            .unwrap_or(0);
     }
 
     pub fn on_chunk(&mut self, chunk: ChatCompletionChunk, out: &mut Vec<ClaudeStreamEvent>) {
@@ -237,6 +244,7 @@ impl OpenAiChatCompletionsToClaudeStream {
             self.input_tokens,
             self.cached_input_tokens,
             self.output_tokens,
+            self.thinking_tokens,
         ));
         out.push(message_stop_event());
         self.state = StreamState::Finished;
