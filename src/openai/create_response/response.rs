@@ -26,6 +26,9 @@ pub struct ResponseBody {
     pub metadata: Metadata,
     pub model: Model,
     pub object: ResponseObject,
+    // Codex Responses stream snapshots can omit `output`; stream aggregation
+    // reconstructs final output items from `response.output_item.done`.
+    #[serde(default)]
     pub output: Vec<ResponseOutputItem>,
     pub parallel_tool_calls: bool,
     pub temperature: f64,

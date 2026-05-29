@@ -325,4 +325,54 @@ mod tests {
         assert_eq!(json["output"].as_array().map(Vec::len), Some(1));
         assert_eq!(json["output"][0]["type"], "image_generation_call");
     }
+
+    #[test]
+    fn stream_to_nonstream_accepts_codex_response_snapshot_without_output() {
+        let chunks = [
+            serde_json::to_vec(&json!({
+                "type": "response.output_item.done",
+                "item": {
+                    "id": "msg_1",
+                    "type": "message",
+                    "status": "completed",
+                    "role": "assistant",
+                    "content": [
+                        {"type": "output_text", "annotations": [], "text": "done"}
+                    ]
+                },
+                "output_index": 0,
+                "sequence_number": 1
+            }))
+            .expect("serialize output_item.done"),
+            serde_json::to_vec(&json!({
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_1",
+                    "created_at": 1u64,
+                    "metadata": {},
+                    "model": "gpt-5.5",
+                    "object": "response",
+                    "parallel_tool_calls": true,
+                    "temperature": 1.0,
+                    "tool_choice": "auto",
+                    "tools": [],
+                    "top_p": 1.0,
+                    "status": "completed"
+                },
+                "sequence_number": 2
+            }))
+            .expect("serialize response.completed without output"),
+        ];
+        let chunk_refs = chunks.iter().map(Vec::as_slice).collect::<Vec<_>>();
+
+        let body = crate::transform::dispatch::stream_to_nonstream(
+            ProtocolKind::OpenAiResponse,
+            &chunk_refs,
+        )
+        .expect("aggregate response stream without snapshot output");
+        let json: Value = serde_json::from_slice(&body).expect("parse");
+
+        assert_eq!(json["output"][0]["type"], "message");
+        assert_eq!(json["output"][0]["content"][0]["text"], "done");
+    }
 }
