@@ -93,7 +93,7 @@ assert_eq!(out, b"{\"text\":\"hi\"}\n");
 | `create_response` | `POST /v1/responses` | `OpenAiCreateResponseRequest`, `OpenAiCreateResponseResponse`, `ResponseBody`, `ResponseStreamEvent` |
 | `create_response::websocket` | Responses WebSocket 连接与消息 | `OpenAiCreateResponseWebSocketConnectRequest`, `OpenAiCreateResponseWebSocketClientMessage`, `OpenAiCreateResponseWebSocketServerMessage` |
 | `compact_response` | `POST /v1/responses/{id}/compact` | `OpenAiCompactRequest`, `OpenAiCompactResponse`, `CompactedResponseOutputItem` |
-| `count_tokens` | `POST /v1/responses/input_tokens/count` | `OpenAiCountTokensRequest`, `OpenAiCountTokensResponse` |
+| `count_tokens` | `POST /v1/responses/input_tokens` | `OpenAiCountTokensRequest`, `OpenAiCountTokensResponse` |
 | `embeddings` | `POST /v1/embeddings` | `OpenAiEmbeddingsRequest`, `OpenAiEmbeddingsResponse`, `OpenAiCreateEmbeddingResponse` |
 | `create_image` | `POST /v1/images/generations` | `OpenAiCreateImageRequest`, `OpenAiCreateImageResponse`, `ImageGenerationStreamEvent` |
 | `create_image_edit` | `POST /v1/images/edits` | `OpenAiCreateImageEditRequest`, `OpenAiCreateImageEditResponse`, `ImageEditStreamEvent` |
