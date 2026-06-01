@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub use crate::openai::count_tokens::types::{
     JsonObject, ResponseApplyPatchCall, ResponseApplyPatchCallOutput,
@@ -213,6 +214,10 @@ pub enum ResponseOutputItem {
     CustomToolCallOutput(ResponseCustomToolCallOutput),
     CustomToolCall(ResponseCustomToolCall),
     ItemReference(ResponseItemReference),
+    /// Upstream Responses streams can emit partial or provider-specific output
+    /// items during `output_item.added` before all fields are available. Keep
+    /// the raw item instead of failing the entire stream on schema drift.
+    Unknown(Value),
 }
 
 /// Image generation call as it appears inside a Responses API `output` array

@@ -589,6 +589,7 @@ impl OpenAiResponseToClaudeStream {
             ResponseOutputItem::ItemReference(item) => {
                 self.emit_text_block(out, format!("item_reference: {}", item.id));
             }
+            ResponseOutputItem::Unknown(_) => {}
         }
     }
 
