@@ -88,18 +88,12 @@ fn input_text_content(text: String) -> ot::ResponseInputContent {
     })
 }
 
-fn push_system_input_message(input_items: &mut Vec<ResponseInputItem>, text: String) {
+fn push_instruction(instructions: &mut Vec<String>, text: String) {
     if text.is_empty() {
         return;
     }
 
-    input_items.push(ResponseInputItem::Message(ResponseInputMessage {
-        content: ResponseInputMessageContent::Text(text),
-        role: ResponseInputMessageRole::System,
-        phase: None,
-        status: None,
-        type_: Some(ResponseInputMessageType::Message),
-    }));
+    instructions.push(text);
 }
 
 fn flush_input_parts(
@@ -686,7 +680,10 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
         let body = value.body;
         let model = claude_model_to_string(&body.model);
 
-        let instructions = beta_system_prompt_to_text(body.system.clone());
+        let mut instructions = Vec::new();
+        if let Some(text) = beta_system_prompt_to_text(body.system.clone()) {
+            instructions.push(text);
+        }
         let parallel_tool_calls = match body.tool_choice.as_ref() {
             Some(BetaToolChoice::Auto(choice)) => choice.disable_parallel_tool_use.map(|v| !v),
             Some(BetaToolChoice::Any(choice)) => choice.disable_parallel_tool_use.map(|v| !v),
@@ -863,7 +860,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
             let fallback_text = beta_message_content_to_text(&message.content);
             match (message.role, message.content) {
                 (BetaMessageRole::System, _) => {
-                    push_system_input_message(&mut input_items, fallback_text);
+                    push_instruction(&mut instructions, fallback_text);
                 }
                 (BetaMessageRole::User, ct::BetaMessageContent::Text(text)) => {
                     if !text.is_empty() {
@@ -891,8 +888,8 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     ResponseInputMessageRole::User,
                                     &mut message_parts,
                                 );
-                                push_system_input_message(
-                                    &mut input_items,
+                                push_instruction(
+                                    &mut instructions,
                                     beta_mid_conversation_system_block_to_text(&block),
                                 );
                             }
@@ -2046,6 +2043,11 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                 Some(BetaSpeed::Standard) | None => None,
             },
         };
+        let instructions = if instructions.is_empty() {
+            None
+        } else {
+            Some(instructions.join("\n"))
+        };
 
         Ok(Self {
             method: HttpMethod::Post,
@@ -2201,7 +2203,7 @@ mod tests {
     }
 
     #[test]
-    fn mid_conversation_system_block_becomes_response_system_message() {
+    fn mid_conversation_system_block_appends_to_response_instructions() {
         let request = request_with_messages(vec![ct::BetaMessageParam {
             role: ct::BetaMessageRole::User,
             content: ct::BetaMessageContent::Blocks(vec![
@@ -2233,6 +2235,11 @@ mod tests {
         }]);
 
         let converted = OpenAiCreateResponseRequest::try_from(request).expect("request converts");
+        assert_eq!(
+            converted.body.instructions.as_deref(),
+            Some("Apply the new policy now.")
+        );
+
         let Some(ResponseInput::Items(items)) = converted.body.input else {
             panic!("expected response input items");
         };
@@ -2245,12 +2252,68 @@ mod tests {
             messages,
             vec![
                 (ResponseInputMessageRole::User, "First user turn"),
-                (
-                    ResponseInputMessageRole::System,
-                    "Apply the new policy now."
-                ),
                 (ResponseInputMessageRole::User, "Second user turn"),
             ]
         );
+    }
+
+    #[test]
+    fn claude_system_role_message_appends_to_response_instructions() {
+        let request = request_with_messages(vec![
+            ct::BetaMessageParam {
+                role: ct::BetaMessageRole::System,
+                content: ct::BetaMessageContent::Text("Use repository conventions.".to_string()),
+            },
+            ct::BetaMessageParam {
+                role: ct::BetaMessageRole::User,
+                content: ct::BetaMessageContent::Text("Implement the fix.".to_string()),
+            },
+        ]);
+
+        let converted = OpenAiCreateResponseRequest::try_from(request).expect("request converts");
+        assert_eq!(
+            converted.body.instructions.as_deref(),
+            Some("Use repository conventions.")
+        );
+
+        let Some(ResponseInput::Items(items)) = converted.body.input else {
+            panic!("expected response input items");
+        };
+        let messages = items
+            .iter()
+            .filter_map(response_message_text)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            messages,
+            vec![(ResponseInputMessageRole::User, "Implement the fix.")]
+        );
+    }
+
+    #[test]
+    fn claude_top_level_and_message_system_prompts_merge_in_response_instructions() {
+        let mut request = request_with_messages(vec![ct::BetaMessageParam {
+            role: ct::BetaMessageRole::System,
+            content: ct::BetaMessageContent::Text("Use repository conventions.".to_string()),
+        }]);
+        request.body.system = Some(ct::BetaSystemPrompt::Text(
+            "Follow platform policy.".to_string(),
+        ));
+
+        let converted = OpenAiCreateResponseRequest::try_from(request).expect("request converts");
+        assert_eq!(
+            converted.body.instructions.as_deref(),
+            Some("Follow platform policy.\nUse repository conventions.")
+        );
+
+        if let Some(ResponseInput::Items(items)) = converted.body.input {
+            assert!(
+                items.iter().all(|item| !matches!(
+                    item,
+                    ResponseInputItem::Message(message)
+                        if matches!(message.role, ResponseInputMessageRole::System)
+                )),
+                "Responses input must not include system-role messages"
+            );
+        }
     }
 }
