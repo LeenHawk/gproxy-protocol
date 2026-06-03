@@ -36,6 +36,34 @@ fn push_block_message(
     push_message_block(messages, role, block);
 }
 
+fn system_text_block(text: String) -> Option<ct::BetaTextBlockParam> {
+    if text.is_empty() {
+        return None;
+    }
+
+    Some(ct::BetaTextBlockParam {
+        text,
+        type_: ct::BetaTextBlockType::Text,
+        cache_control: None,
+        citations: None,
+    })
+}
+
+fn system_prompt(
+    instructions: Option<String>,
+    mut blocks: Vec<ct::BetaTextBlockParam>,
+) -> Option<ct::BetaSystemPrompt> {
+    if let Some(block) = instructions.and_then(system_text_block) {
+        blocks.insert(0, block);
+    }
+
+    match blocks.len() {
+        0 => None,
+        1 => Some(ct::BetaSystemPrompt::Text(blocks[0].text.clone())),
+        _ => Some(ct::BetaSystemPrompt::Blocks(blocks)),
+    }
+}
+
 fn web_search_tool_use_id(
     id: Option<String>,
     action: &ot::ResponseFunctionWebSearchAction,
@@ -58,9 +86,24 @@ impl TryFrom<OpenAiCreateResponseRequest> for ClaudeCreateMessageRequest {
     fn try_from(value: OpenAiCreateResponseRequest) -> Result<Self, TransformError> {
         let body = value.body;
         let mut messages = Vec::new();
+        let mut system_blocks = Vec::new();
+        let mut seen_non_system = false;
         let mut tool_use_ids = ClaudeToolUseIdMapper::default();
 
         for item in openai_input_to_items(body.input.clone()) {
+            let is_system_input_item = matches!(
+                &item,
+                ot::ResponseInputItem::Message(message)
+                    if matches!(
+                        message.role,
+                        ot::ResponseInputMessageRole::System
+                            | ot::ResponseInputMessageRole::Developer
+                    )
+            );
+            if !is_system_input_item {
+                seen_non_system = true;
+            }
+
             match item {
                 ot::ResponseInputItem::Message(message) => {
                     if matches!(
@@ -69,7 +112,13 @@ impl TryFrom<OpenAiCreateResponseRequest> for ClaudeCreateMessageRequest {
                             | ot::ResponseInputMessageRole::Developer
                     ) {
                         let text = openai_message_content_to_text(&message.content);
-                        push_mid_conversation_system_block(&mut messages, text);
+                        if !seen_non_system {
+                            if let Some(block) = system_text_block(text) {
+                                system_blocks.push(block);
+                            }
+                        } else {
+                            push_mid_conversation_system_block(&mut messages, text);
+                        }
                     } else {
                         messages.push(ct::BetaMessageParam {
                             content: openai_message_content_to_claude(message.content),
@@ -875,13 +924,7 @@ impl TryFrom<OpenAiCreateResponseRequest> for ClaudeCreateMessageRequest {
             user_id: Some(user_id),
         });
 
-        let system = body.instructions.and_then(|text| {
-            if text.is_empty() {
-                None
-            } else {
-                Some(ct::BetaSystemPrompt::Text(text))
-            }
-        });
+        let system = system_prompt(body.instructions, system_blocks);
 
         Ok(ClaudeCreateMessageRequest {
             method: ClaudeHttpMethod::Post,
@@ -1006,6 +1049,85 @@ mod tests {
             ct::BetaContentBlockParam::RedactedThinking(block)
                 if block.data == "ciphertext"
         ));
+    }
+
+    #[test]
+    fn response_leading_system_input_items_map_to_top_level_system() {
+        let body = serde_json::from_value(serde_json::json!({
+            "model": "claude-test",
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{ "type": "input_text", "text": "You are concise." }]
+                },
+                {
+                    "role": "developer",
+                    "content": [{ "type": "input_text", "text": "Use markdown." }]
+                },
+                {
+                    "role": "user",
+                    "content": [{ "type": "input_text", "text": "Hello" }]
+                }
+            ]
+        }))
+        .expect("Responses body should deserialize");
+        let request = OpenAiCreateResponseRequest {
+            body,
+            ..Default::default()
+        };
+
+        let converted = ClaudeCreateMessageRequest::try_from(request).expect("request converts");
+
+        let Some(ct::BetaSystemPrompt::Blocks(blocks)) = converted.body.system else {
+            panic!("expected leading system/developer items to become top-level system blocks");
+        };
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].text, "You are concise.");
+        assert_eq!(blocks[1].text, "Use markdown.");
+        assert_eq!(converted.body.messages.len(), 1);
+        assert_eq!(
+            converted.body.messages[0].content,
+            ct::BetaMessageContent::Blocks(vec![ct::BetaContentBlockParam::Text(
+                ct::BetaTextBlockParam {
+                    text: "Hello".to_string(),
+                    type_: ct::BetaTextBlockType::Text,
+                    cache_control: None,
+                    citations: None,
+                }
+            )])
+        );
+    }
+
+    #[test]
+    fn response_instructions_and_leading_system_inputs_share_top_level_system() {
+        let body = serde_json::from_value(serde_json::json!({
+            "model": "claude-test",
+            "instructions": "Follow the platform policy.",
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{ "type": "input_text", "text": "Use the repo conventions." }]
+                },
+                {
+                    "role": "user",
+                    "content": [{ "type": "input_text", "text": "Implement it" }]
+                }
+            ]
+        }))
+        .expect("Responses body should deserialize");
+        let request = OpenAiCreateResponseRequest {
+            body,
+            ..Default::default()
+        };
+
+        let converted = ClaudeCreateMessageRequest::try_from(request).expect("request converts");
+
+        let Some(ct::BetaSystemPrompt::Blocks(blocks)) = converted.body.system else {
+            panic!("expected instructions and leading system input to share top-level system");
+        };
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].text, "Follow the platform policy.");
+        assert_eq!(blocks[1].text, "Use the repo conventions.");
     }
 
     #[test]
