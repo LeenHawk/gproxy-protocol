@@ -71,10 +71,37 @@ enum ClaudeToolKind {
     FileSearch,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct RecordedToolCall {
     item_index: usize,
     kind: ClaudeToolKind,
+    response_call_id: String,
+}
+
+fn stable_response_id_suffix(value: &str) -> String {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for byte in value.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+fn prefixed_response_id(original: &str, prefix: &str) -> String {
+    let bare_prefix = prefix.trim_end_matches('_');
+    if original.starts_with(bare_prefix) {
+        original.to_string()
+    } else {
+        format!("{prefix}{}", stable_response_id_suffix(original))
+    }
+}
+
+fn response_call_id(original: &str) -> String {
+    prefixed_response_id(original, "call_")
+}
+
+fn response_function_call_item_id(original: &str) -> String {
+    prefixed_response_id(original, "fc_")
 }
 
 fn json_string<T: serde::Serialize>(value: &T) -> String {
@@ -903,12 +930,16 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     .get(&block.tool_use_id)
                                     .map(|record| record.kind)
                                     .unwrap_or(ClaudeToolKind::Function);
+                                let response_call_id = recorded_calls
+                                    .get(&block.tool_use_id)
+                                    .map(|record| record.response_call_id.clone())
+                                    .unwrap_or_else(|| response_call_id(&block.tool_use_id));
                                 let is_error = block.is_error.unwrap_or(false);
                                 match kind {
                                     ClaudeToolKind::Function => {
                                         input_items.push(ResponseInputItem::FunctionCallOutput(
                                             ot::ResponseFunctionCallOutput {
-                                                call_id: block.tool_use_id,
+                                                call_id: response_call_id,
                                                 output: tool_result_content_to_function_output(
                                                     block.content,
                                                 ),
@@ -925,7 +956,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     ClaudeToolKind::Custom | ClaudeToolKind::ApplyPatch => {
                                         input_items.push(ResponseInputItem::CustomToolCallOutput(
                                             ot::ResponseCustomToolCallOutput {
-                                                call_id: block.tool_use_id,
+                                                call_id: response_call_id,
                                                 output: tool_result_content_to_custom_output(
                                                     block.content,
                                                 ),
@@ -984,7 +1015,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                             tool_result_content_to_text(block.content);
                                         input_items.push(ResponseInputItem::ShellCallOutput(
                                             ot::ResponseShellCallOutput {
-                                                call_id: block.tool_use_id,
+                                                call_id: response_call_id,
                                                 output: if output_text.is_empty() {
                                                     Vec::new()
                                                 } else {
@@ -1044,7 +1075,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                         {
                                             input_items.push(ResponseInputItem::ComputerCallOutput(
                                                 ot::ResponseComputerCallOutput {
-                                                    call_id: block.tool_use_id,
+                                                    call_id: response_call_id,
                                                     output: screenshot,
                                                     type_: ot::ResponseComputerCallOutputType::ComputerCallOutput,
                                                     id: None,
@@ -1488,7 +1519,10 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                             }
                             ct::BetaContentBlockParam::ToolUse(block) => {
                                 let tool_name = block.name.clone();
-                                let call_id = block.id.clone();
+                                let claude_tool_use_id = block.id.clone();
+                                let call_id = response_call_id(&claude_tool_use_id);
+                                let function_item_id =
+                                    response_function_call_item_id(&claude_tool_use_id);
                                 let input_json = json_string(&block.input);
                                 let mut actual_kind = tool_registry
                                     .get(&tool_name)
@@ -1501,7 +1535,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                             call_id: call_id.clone(),
                                             name: tool_name,
                                             type_: ot::ResponseFunctionToolCallType::FunctionCall,
-                                            id: Some(call_id.clone()),
+                                            id: Some(function_item_id.clone()),
                                             status: Some(ot::ResponseItemStatus::Completed),
                                         },
                                     ),
@@ -1512,14 +1546,17 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                             input: input_json,
                                             name: tool_name,
                                             type_: ot::ResponseCustomToolCallType::CustomToolCall,
-                                            id: Some(call_id.clone()),
+                                            id: None,
                                         })
                                     }
                                     ClaudeToolKind::Computer => {
                                         if let Some(action) = computer_action_from_input(&block.input) {
                                             ResponseInputItem::ComputerToolCall(
                                                 ot::ResponseComputerToolCall {
-                                                    id: call_id.clone(),
+                                                    id: prefixed_response_id(
+                                                        &claude_tool_use_id,
+                                                        "cu_",
+                                                    ),
                                                     action,
                                                     call_id: call_id.clone(),
                                                     pending_safety_checks: Vec::new(),
@@ -1534,13 +1571,13 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                                 input: input_json,
                                                 name: tool_name,
                                                 type_: ot::ResponseCustomToolCallType::CustomToolCall,
-                                                id: Some(call_id.clone()),
+                                                id: None,
                                             })
                                         }
                                     }
                                     ClaudeToolKind::CodeInterpreter => ResponseInputItem::CodeInterpreterToolCall(
                                         ot::ResponseCodeInterpreterToolCall {
-                                            id: call_id.clone(),
+                                            id: prefixed_response_id(&claude_tool_use_id, "ci_"),
                                             code: str_field(&block.input, "code")
                                                 .unwrap_or_default()
                                                 .to_string(),
@@ -1564,14 +1601,14 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                             },
                                             call_id: call_id.clone(),
                                             type_: ot::ResponseShellCallType::ShellCall,
-                                            id: Some(call_id.clone()),
+                                            id: None,
                                             environment: None,
                                             status: Some(ot::ResponseItemStatus::Completed),
                                         },
                                     ),
                                     ClaudeToolKind::FileSearch => ResponseInputItem::FileSearchToolCall(
                                         ot::ResponseFileSearchToolCall {
-                                            id: call_id.clone(),
+                                            id: prefixed_response_id(&claude_tool_use_id, "fs_"),
                                             queries: file_search_queries(&block.input),
                                             status: ot::ResponseFileSearchToolCallStatus::Completed,
                                             type_: ot::ResponseFileSearchToolCallType::FileSearchCall,
@@ -1580,7 +1617,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     ),
                                     ClaudeToolKind::WebSearch => ResponseInputItem::FunctionWebSearch(
                                         ot::ResponseFunctionWebSearch {
-                                            id: Some(call_id.clone()),
+                                            id: None,
                                             action: ot::ResponseFunctionWebSearchAction::Search {
                                                 query: str_field(&block.input, "query")
                                                     .map(ToString::to_string),
@@ -1596,7 +1633,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     ),
                                     ClaudeToolKind::WebFetch => ResponseInputItem::FunctionWebSearch(
                                         ot::ResponseFunctionWebSearch {
-                                            id: Some(call_id.clone()),
+                                            id: None,
                                             action: ot::ResponseFunctionWebSearchAction::OpenPage {
                                                 url: str_field(&block.input, "url")
                                                     .map(ToString::to_string),
@@ -1611,7 +1648,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                             call_id: call_id.clone(),
                                             name: tool_name,
                                             type_: ot::ResponseFunctionToolCallType::FunctionCall,
-                                            id: Some(call_id.clone()),
+                                            id: Some(function_item_id),
                                             status: Some(ot::ResponseItemStatus::Completed),
                                         },
                                     ),
@@ -1619,20 +1656,25 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                 let item_index = input_items.len();
                                 input_items.push(item);
                                 recorded_calls.insert(
-                                    call_id,
+                                    claude_tool_use_id,
                                     RecordedToolCall {
                                         item_index,
                                         kind: actual_kind,
+                                        response_call_id: call_id,
                                     },
                                 );
                             }
                             ct::BetaContentBlockParam::ServerToolUse(block) => {
-                                let call_id = block.id.clone();
+                                let claude_tool_use_id = block.id.clone();
+                                let call_id = response_call_id(&claude_tool_use_id);
                                 let item = match block.name {
                                     ct::BetaServerToolUseName::CodeExecution => {
                                         ResponseInputItem::CodeInterpreterToolCall(
                                             ot::ResponseCodeInterpreterToolCall {
-                                                id: call_id.clone(),
+                                                id: prefixed_response_id(
+                                                    &claude_tool_use_id,
+                                                    "ci_",
+                                                ),
                                                 code: str_field(&block.input, "code")
                                                     .unwrap_or_default()
                                                     .to_string(),
@@ -1647,7 +1689,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     }
                                     ct::BetaServerToolUseName::WebSearch => {
                                         ResponseInputItem::FunctionWebSearch(ot::ResponseFunctionWebSearch {
-                                            id: Some(call_id.clone()),
+                                            id: None,
                                             action: ot::ResponseFunctionWebSearchAction::Search {
                                                 query: str_field(&block.input, "query")
                                                     .map(ToString::to_string),
@@ -1663,7 +1705,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     }
                                     ct::BetaServerToolUseName::WebFetch => {
                                         ResponseInputItem::FunctionWebSearch(ot::ResponseFunctionWebSearch {
-                                            id: Some(call_id.clone()),
+                                            id: None,
                                             action: ot::ResponseFunctionWebSearchAction::OpenPage {
                                                 url: str_field(&block.input, "url")
                                                     .map(ToString::to_string),
@@ -1684,7 +1726,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                             },
                                             call_id: call_id.clone(),
                                             type_: ot::ResponseShellCallType::ShellCall,
-                                            id: Some(call_id.clone()),
+                                            id: None,
                                             environment: None,
                                             status: Some(ot::ResponseItemStatus::Completed),
                                         })
@@ -1695,12 +1737,12 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                             input: json_string(&block.input),
                                             name: "text_editor_code_execution".to_string(),
                                             type_: ot::ResponseCustomToolCallType::CustomToolCall,
-                                            id: Some(call_id.clone()),
+                                            id: None,
                                         })
                                     }
                                     ct::BetaServerToolUseName::ToolSearchToolRegex => {
                                         ResponseInputItem::FileSearchToolCall(ot::ResponseFileSearchToolCall {
-                                            id: call_id.clone(),
+                                            id: prefixed_response_id(&claude_tool_use_id, "fs_"),
                                             queries: file_search_queries(&block.input),
                                             status: ot::ResponseFileSearchToolCallStatus::Completed,
                                             type_: ot::ResponseFileSearchToolCallType::FileSearchCall,
@@ -1709,7 +1751,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     }
                                     ct::BetaServerToolUseName::ToolSearchToolBm25 => {
                                         ResponseInputItem::FileSearchToolCall(ot::ResponseFileSearchToolCall {
-                                            id: call_id.clone(),
+                                            id: prefixed_response_id(&claude_tool_use_id, "fs_"),
                                             queries: file_search_queries(&block.input),
                                             status: ot::ResponseFileSearchToolCallStatus::Completed,
                                             type_: ot::ResponseFileSearchToolCallType::FileSearchCall,
@@ -1738,10 +1780,17 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                 };
                                 let item_index = input_items.len();
                                 input_items.push(item);
-                                recorded_calls
-                                    .insert(call_id, RecordedToolCall { item_index, kind });
+                                recorded_calls.insert(
+                                    claude_tool_use_id,
+                                    RecordedToolCall {
+                                        item_index,
+                                        kind,
+                                        response_call_id: call_id,
+                                    },
+                                );
                             }
                             ct::BetaContentBlockParam::McpToolUse(block) => {
+                                let response_call_id = response_call_id(&block.id);
                                 let item_index = input_items.len();
                                 input_items.push(ResponseInputItem::McpCall(ot::ResponseMcpCall {
                                     id: block.id.clone(),
@@ -1759,6 +1808,7 @@ impl TryFrom<ClaudeCreateMessageRequest> for OpenAiCreateResponseRequest {
                                     RecordedToolCall {
                                         item_index,
                                         kind: ClaudeToolKind::Mcp,
+                                        response_call_id,
                                     },
                                 );
                             }
@@ -2315,5 +2365,75 @@ mod tests {
                 "Responses input must not include system-role messages"
             );
         }
+    }
+
+    #[test]
+    fn claude_toolu_tool_use_maps_to_response_safe_function_ids() {
+        let claude_tool_use_id = "toolu_011v4X665AFrfGMHazbE2hLe";
+        let mut tool_input = ct::JsonObject::new();
+        tool_input.insert("query".to_string(), Value::String("hi".to_string()));
+
+        let request = request_with_messages(vec![
+            ct::BetaMessageParam {
+                role: ct::BetaMessageRole::Assistant,
+                content: ct::BetaMessageContent::Blocks(vec![ct::BetaContentBlockParam::ToolUse(
+                    ct::BetaToolUseBlockParam {
+                        id: claude_tool_use_id.to_string(),
+                        input: tool_input,
+                        name: "lookup".to_string(),
+                        type_: ct::BetaToolUseBlockType::ToolUse,
+                        cache_control: None,
+                        caller: None,
+                    },
+                )]),
+            },
+            ct::BetaMessageParam {
+                role: ct::BetaMessageRole::User,
+                content: ct::BetaMessageContent::Blocks(vec![
+                    ct::BetaContentBlockParam::ToolResult(ct::BetaToolResultBlockParam {
+                        tool_use_id: claude_tool_use_id.to_string(),
+                        type_: ct::BetaToolResultBlockType::ToolResult,
+                        cache_control: None,
+                        content: Some(ct::BetaToolResultBlockParamContent::Text(
+                            "result".to_string(),
+                        )),
+                        is_error: None,
+                    }),
+                ]),
+            },
+        ]);
+
+        let converted = OpenAiCreateResponseRequest::try_from(request).expect("request converts");
+        let Some(ResponseInput::Items(items)) = converted.body.input else {
+            panic!("expected response input items");
+        };
+
+        let function_call = items
+            .iter()
+            .find_map(|item| match item {
+                ResponseInputItem::FunctionToolCall(call) => Some(call),
+                _ => None,
+            })
+            .expect("function call item");
+        let function_output = items
+            .iter()
+            .find_map(|item| match item {
+                ResponseInputItem::FunctionCallOutput(output) => Some(output),
+                _ => None,
+            })
+            .expect("function call output item");
+
+        let item_id = function_call.id.as_deref().expect("function item id");
+        assert!(
+            item_id.starts_with("fc_"),
+            "Responses function_call id must use fc_ prefix"
+        );
+        assert_ne!(item_id, claude_tool_use_id);
+        assert!(
+            function_call.call_id.starts_with("call_"),
+            "Responses function_call call_id must use call_ prefix"
+        );
+        assert_ne!(function_call.call_id, claude_tool_use_id);
+        assert_eq!(function_output.call_id, function_call.call_id);
     }
 }
